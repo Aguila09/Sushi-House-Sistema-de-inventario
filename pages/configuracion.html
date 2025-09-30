@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración - RestoControl</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/loading.css">
+</head>
+<body>
+    <!-- LOADING SCREEN -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Cargando Configuración...</p>
+    </div>
+
+    <!-- HEADER -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🍽️</span>
+                    <h1>RestoControl</h1>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="../index.html">Inicio</a></li>
+                        <li><a href="productos.html">Productos</a></li>
+                        <li><a href="categorias.html">Categorías</a></li>
+                        <li><a href="proveedores.html">Proveedores</a></li>
+                        <li><a href="usuarios.html">Usuarios</a></li>
+                        <li><a href="configuracion.html" class="active">Configuración</a></li>
+                    </ul>
+                </nav>
+                <div class="user-menu">
+                    <div class="user-info">
+                        <div class="avatar">AM</div>
+                        <span id="userName">Admin Manager</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline" id="btnLogout">Cerrar Sesión</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="container">
+        <div class="page-title">
+            <h2>Configuración del Sistema</h2>
+        </div>
+
+        <!-- NOTIFICACIONES -->
+        <div id="notifications" class="notifications-container"></div>
+
+        <!-- CONFIGURACIÓN GENERAL -->
+        <section>
+            <div class="card">
+                <div class="card-header">
+                    <h3>Configuración General</h3>
+                    <div class="card-icon primary">⚙️</div>
+                </div>
+                <form id="configGeneralForm" class="config-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nombreRestaurante">Nombre del Restaurante *</label>
+                            <input type="text" id="nombreRestaurante" name="nombreRestaurante" required maxlength="100">
+                            <span class="error-message" id="errorNombreRestaurante"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="moneda">Moneda *</label>
+                            <select id="moneda" name="moneda" required>
+                                <option value="MXN">Peso Mexicano (MXN)</option>
+                                <option value="USD">Dólar Estadounidense (USD)</option>
+                                <option value="EUR">Euro (EUR)</option>
+                                <option value="COP">Peso Colombiano (COP)</option>
+                                <option value="ARS">Peso Argentino (ARS)</option>
+                                <option value="CLP">Peso Chileno (CLP)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="iva">IVA (%) *</label>
+                            <input type="number" id="iva" name="iva" min="0" max="100" step="0.1" required>
+                            <span class="error-message" id="errorIva"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="formatoFecha">Formato de Fecha *</label>
+                            <select id="formatoFecha" name="formatoFecha" required>
+                                <option value="dd/mm/yyyy">DD/MM/AAAA</option>
+                                <option value="mm/dd/yyyy">MM/DD/AAAA</option>
+                                <option value="yyyy-mm-dd">AAAA-MM-DD</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="direccionRestaurante">Dirección del Restaurante</label>
+                        <textarea id="direccionRestaurante" name="direccionRestaurante" rows="2" maxlength="200"></textarea>
+                        <div class="char-counter"><span id="direccionCounter">0</span>/200</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="telefonoRestaurante">Teléfono del Restaurante</label>
+                        <input type="tel" id="telefonoRestaurante" name="telefonoRestaurante">
+                        <span class="error-message" id="errorTelefonoRestaurante"></span>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <span class="btn-loading" id="btnLoadingGeneral" style="display: none;"></span>
+                            Guardar Configuración General
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- CONFIGURACIÓN DE INVENTARIO -->
+        <section style="margin-top: 30px;">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Configuración de Inventario</h3>
+                    <div class="card-icon success">📦</div>
+                </div>
+                <form id="configInventarioForm" class="config-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="stockMinimoGlobal">Stock Mínimo Global</label>
+                            <input type="number" id="stockMinimoGlobal" name="stockMinimoGlobal" min="0" max="1000">
+                            <small>Stock mínimo por defecto para nuevos productos</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="alertaStockBajo">Alerta de Stock Bajo</label>
+                            <select id="alertaStockBajo" name="alertaStockBajo">
+                                <option value="si">Sí</option>
+                                <option value="no">No</option>
+                            </select>
+                            <small>Recibir alertas cuando el stock esté bajo</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="unidadMedida">Unidad de Medida Predeterminada</label>
+                            <select id="unidadMedida" name="unidadMedida">
+                                <option value="unidades">Unidades</option>
+                                <option value="kg">Kilogramos</option>
+                                <option value="g">Gramos</option>
+                                <option value="l">Litros</option>
+                                <option value="ml">Mililitros</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="categoriaPredeterminada">Categoría Predeterminada</label>
+                            <select id="categoriaPredeterminada" name="categoriaPredeterminada">
+                                <option value="">Seleccione una categoría</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="controlCaducidad" name="controlCaducidad">
+                            Habilitar control de caducidad de productos
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notificacionesAutomaticas" name="notificacionesAutomaticas">
+                            Enviar notificaciones automáticas de stock bajo
+                        </label>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <span class="btn-loading" id="btnLoadingInventario" style="display: none;"></span>
+                            Guardar Configuración de Inventario
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- CONFIGURACIÓN DE NOTIFICACIONES -->
+        <section style="margin-top: 30px;">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Configuración de Notificaciones</h3>
+                    <div class="card-icon warning">🔔</div>
+                </div>
+                <form id="configNotificacionesForm" class="config-form">
+                    <div class="form-group">
+                        <label for="emailNotificaciones">Email para Notificaciones</label>
+                        <input type="email" id="emailNotificaciones" name="emailNotificaciones">
+                        <span class="error-message" id="errorEmailNotificaciones"></span>
+                        <small>Email donde se enviarán las alertas y notificaciones</small>
+                    </div>
+
+                    <div class="form-group">
+                        <h4 style="margin-bottom: 15px;">Tipos de Notificaciones</h4>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="notifStockBajo" name="notifStockBajo" checked>
+                                Stock bajo
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="notifStockAgotado" name="notifStockAgotado" checked>
+                                Stock agotado
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="notifProductosCaducados" name="notifProductosCaducados">
+                                Productos próximos a caducar
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="notifPedidosPendientes" name="notifPedidosPendientes">
+                                Pedidos pendientes
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="notifReportesAutomaticos" name="notifReportesAutomaticos">
+                                Reportes automáticos
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="notifActividadUsuarios" name="notifActividadUsuarios">
+                                Actividad de usuarios
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="frecuenciaReportes">Frecuencia de Reportes Automáticos</label>
+                            <select id="frecuenciaReportes" name="frecuenciaReportes">
+                                <option value="diario">Diario</option>
+                                <option value="semanal">Semanal</option>
+                                <option value="mensual">Mensual</option>
+                                <option value="ninguno">Ninguno</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="horaNotificaciones">Hora de Envío de Notificaciones</label>
+                            <input type="time" id="horaNotificaciones" name="horaNotificaciones" value="09:00">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <span class="btn-loading" id="btnLoadingNotificaciones" style="display: none;"></span>
+                            Guardar Configuración de Notificaciones
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- CONFIGURACIÓN DE SEGURIDAD -->
+        <section style="margin-top: 30px;">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Configuración de Seguridad</h3>
+                    <div class="card-icon danger">🔒</div>
+                </div>
+                <form id="configSeguridadForm" class="config-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tiempoSesion">Tiempo de Sesión (minutos)</label>
+                            <input type="number" id="tiempoSesion" name="tiempoSesion" min="5" max="480" value="30">
+                            <small>Tiempo de inactividad antes de cerrar sesión automáticamente</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="intentosFallidos">Intentos Fallidos Permitidos</label>
+                            <input type="number" id="intentosFallidos" name="intentosFallidos" min="1" max="10" value="3">
+                            <small>Número de intentos fallidos antes de bloquear la cuenta</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="requerirConfirmacion" name="requerirConfirmacion">
+                            Requerir confirmación para acciones críticas
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="registroActividad" name="registroActividad" checked>
+                            Mantener registro de actividad de usuarios
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="backupAutomatico" name="backupAutomatico">
+                            Realizar copias de seguridad automáticas
+                        </label>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <span class="btn-loading" id="btnLoadingSeguridad" style="display: none;"></span>
+                            Guardar Configuración de Seguridad
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- MANTENIMIENTO DEL SISTEMA -->
+        <section style="margin-top: 30px;">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Mantenimiento del Sistema</h3>
+                    <div class="card-icon primary">🛠️</div>
+                </div>
+                <div class="config-form">
+                    <div class="form-group">
+                        <h4 style="margin-bottom: 15px;">Copia de Seguridad</h4>
+                        <p style="margin-bottom: 15px;">Realice una copia de seguridad de todos los datos del sistema.</p>
+                        <button type="button" class="btn btn-success" id="btnBackup">
+                            <span>💾</span> Generar Copia de Seguridad
+                        </button>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <h4 style="margin-bottom: 15px;">Restaurar Sistema</h4>
+                        <p style="margin-bottom: 15px;">Restaurar el sistema desde una copia de seguridad anterior.</p>
+                        <input type="file" id="fileRestore" accept=".json" style="margin-bottom: 10px;">
+                        <button type="button" class="btn btn-warning" id="btnRestore">
+                            <span>🔄</span> Restaurar desde Archivo
+                        </button>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <h4 style="margin-bottom: 15px; color: var(--accent);">Zona de Peligro</h4>
+                        <p style="margin-bottom: 15px; color: var(--accent);">Estas acciones no se pueden deshacer.</p>
+                        <button type="button" class="btn btn-danger" id="btnResetSystem">
+                            <span>⚠️</span> Restablecer Sistema
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MODAL CONFIRMACIÓN -->
+        <div id="modalConfirm" class="modal">
+            <div class="modal-content confirm-modal">
+                <div class="modal-header">
+                    <h3>Confirmar acción</h3>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmMessage">¿Está seguro de que desea realizar esta acción?</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" id="btnConfirmCancel">Cancelar</button>
+                    <button class="btn btn-danger" id="btnConfirmAccept">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="copyright">
+                    &copy; 2023 RestoControl - Sistema de Inventario para Restaurantes
+                </div>
+                <div class="footer-links">
+                    <a href="configuracion.html">Configuración</a>
+                    <a href="#">Términos de uso</a>
+                    <a href="#">Política de privacidad</a>
+                    <a href="#">Soporte</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/storage.js"></script>
+    <script src="../js/validation.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/configuracion.js"></script>
+</body>
+</html>

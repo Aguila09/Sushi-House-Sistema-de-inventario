@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios - RestoControl</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/loading.css">
+</head>
+<body>
+    <!-- LOADING SCREEN -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Cargando Usuarios...</p>
+    </div>
+
+    <!-- HEADER -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🍽️</span>
+                    <h1>RestoControl</h1>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="../index.html">Inicio</a></li>
+                        <li><a href="productos.html">Productos</a></li>
+                        <li><a href="categorias.html">Categorías</a></li>
+                        <li><a href="proveedores.html">Proveedores</a></li>
+                        <li><a href="usuarios.html" class="active">Usuarios</a></li>
+                        <li><a href="reportes.html">Reportes</a></li>
+                    </ul>
+                </nav>
+                <div class="user-menu">
+                    <div class="user-info">
+                        <div class="avatar">AM</div>
+                        <span id="userName">Admin Manager</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline" id="btnLogout">Cerrar Sesión</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="container">
+        <div class="page-title">
+            <h2>Gestión de Usuarios</h2>
+            <button class="btn btn-primary" id="btnNuevoUsuario">
+                <span>+</span> Nuevo Usuario
+            </button>
+        </div>
+
+        <!-- NOTIFICACIONES -->
+        <div id="notifications" class="notifications-container"></div>
+
+        <!-- DASHBOARD USUARIOS -->
+        <section class="dashboard">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Total Usuarios</h3>
+                    <div class="card-icon primary">👥</div>
+                </div>
+                <div class="card-value" id="totalUsuarios">0</div>
+                <div class="card-title">Usuarios registrados</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Administradores</h3>
+                    <div class="card-icon success">👑</div>
+                </div>
+                <div class="card-value" id="totalAdministradores">0</div>
+                <div class="card-title">Usuarios con rol admin</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Usuarios Activos</h3>
+                    <div class="card-icon warning">✅</div>
+                </div>
+                <div class="card-value" id="usuariosActivos">0</div>
+                <div class="card-title">Usuarios activos ahora</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Accesos Hoy</h3>
+                    <div class="card-icon danger">📊</div>
+                </div>
+                <div class="card-value" id="accesosHoy">0</div>
+                <div class="card-title">Inicios de sesión hoy</div>
+            </div>
+        </section>
+
+        <!-- TABLA DE USUARIOS -->
+        <section>
+            <div class="section-header">
+                <h3>Lista de Usuarios</h3>
+                <div class="table-actions">
+                    <input type="text" id="searchInputUsuarios" placeholder="Buscar usuarios..." class="search-input">
+                    <button class="btn btn-sm" id="btnExportUsuarios">Exportar</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <div class="table-loading" id="tableLoadingUsuarios">
+                    <div class="spinner"></div>
+                    <p>Cargando usuarios...</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-sort="nombre">Usuario ↗</th>
+                            <th data-sort="email">Email</th>
+                            <th data-sort="rol">Rol</th>
+                            <th data-sort="ultimoAcceso">Último Acceso</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaUsuarios">
+                        <!-- Los usuarios se cargarán dinámicamente con JavaScript -->
+                    </tbody>
+                </table>
+                <div class="table-empty" id="tableEmptyUsuarios" style="display: none;">
+                    <p>No se encontraron usuarios</p>
+                </div>
+            </div>
+            <div class="pagination" id="paginationUsuarios">
+                <!-- Paginación generada dinámicamente -->
+            </div>
+        </section>
+
+        <!-- MODAL FORMULARIO USUARIO -->
+        <div id="modalUsuario" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitleUsuario">Nuevo Usuario</h3>
+                    <button class="btn-close" id="btnCloseModalUsuario">&times;</button>
+                </div>
+                <form id="usuarioForm" class="modal-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nombreUsuario">Nombre Completo *</label>
+                            <input type="text" id="nombreUsuario" name="nombre" required maxlength="100">
+                            <span class="error-message" id="errorNombreUsuario"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="emailUsuario">Email *</label>
+                            <input type="email" id="emailUsuario" name="email" required>
+                            <span class="error-message" id="errorEmailUsuario"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="rolUsuario">Rol *</label>
+                            <select id="rolUsuario" name="rol" required>
+                                <option value="">Seleccione un rol</option>
+                                <option value="admin">Administrador</option>
+                                <option value="usuario">Usuario</option>
+                                <option value="visor">Visor</option>
+                            </select>
+                            <span class="error-message" id="errorRolUsuario"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="estadoUsuario">Estado *</label>
+                            <select id="estadoUsuario" name="estado" required>
+                                <option value="activo">Activo</option>
+                                <option value="inactivo">Inactivo</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row" id="contrasenaFields">
+                        <div class="form-group">
+                            <label for="contrasenaUsuario">Contraseña *</label>
+                            <input type="password" id="contrasenaUsuario" name="contrasena" required minlength="6">
+                            <span class="error-message" id="errorContrasenaUsuario"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmarContrasena">Confirmar Contraseña *</label>
+                            <input type="password" id="confirmarContrasena" name="confirmarContrasena" required>
+                            <span class="error-message" id="errorConfirmarContrasena"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="telefonoUsuario">Teléfono</label>
+                        <input type="tel" id="telefonoUsuario" name="telefono">
+                        <span class="error-message" id="errorTelefonoUsuario"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="permisosUsuario">Permisos Especiales</label>
+                        <div class="checkbox-group">
+                            <label>
+                                <input type="checkbox" name="permisos" value="gestion_productos"> Gestión de Productos
+                            </label>
+                            <label>
+                                <input type="checkbox" name="permisos" value="gestion_usuarios"> Gestión de Usuarios
+                            </label>
+                            <label>
+                                <input type="checkbox" name="permisos" value="ver_reportes"> Ver Reportes
+                            </label>
+                            <label>
+                                <input type="checkbox" name="permisos" value="exportar_datos"> Exportar Datos
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn" id="btnCancelarUsuario">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="btnSubmitUsuario">
+                            <span class="btn-loading" id="btnLoadingUsuario" style="display: none;"></span>
+                            <span id="btnTextUsuario">Guardar Usuario</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL CONFIRMACIÓN -->
+        <div id="modalConfirm" class="modal">
+            <div class="modal-content confirm-modal">
+                <div class="modal-header">
+                    <h3>Confirmar acción</h3>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmMessage">¿Está seguro de que desea realizar esta acción?</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" id="btnConfirmCancel">Cancelar</button>
+                    <button class="btn btn-danger" id="btnConfirmAccept">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="copyright">
+                    &copy; 2023 RestoControl - Sistema de Inventario para Restaurantes
+                </div>
+                <div class="footer-links">
+                    <a href="configuracion.html">Configuración</a>
+                    <a href="#">Términos de uso</a>
+                    <a href="#">Política de privacidad</a>
+                    <a href="#">Soporte</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/storage.js"></script>
+    <script src="../js/validation.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/usuarios.js"></script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sushi House - Sistema de Inventario para Restaurantes</title>
+    <meta name="description" content="Sistema de gestión de inventario para restaurantes - Control de stock, productos y proveedores">
+    <meta name="keywords" content="inventario, restaurante, stock, productos, gestión">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/loading.css">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <!-- LOADING SCREEN -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Cargando Sushi House...</p>
+    </div>
+
+    <!-- HEADER -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🍽️</span>
+                    <h1>Sushi House</h1>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="index.html" class="active">Inicio</a></li>
+                        <li><a href="pages/productos.html">Productos</a></li>
+                        <li><a href="pages/categorias.html">Categorías</a></li>
+                        <li><a href="pages/proveedores.html">Proveedores</a></li>
+                        <li><a href="pages/usuarios.html">Usuarios</a></li>
+                        <li><a href="pages/reportes.html">Reportes</a></li>
+                    </ul>
+                </nav>
+                <div class="user-menu">
+                    <div class="user-info">
+                        <div class="avatar">AM</div>
+                        <span id="userName">Admin Manager</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline" id="btnLogout">Cerrar Sesión</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="container">
+        <div class="page-title">
+            <h2>Panel de Control</h2>
+            <button class="btn btn-primary" id="btnNuevoProducto">
+                <span>+</span> Nuevo Producto
+            </button>
+        </div>
+
+        <!-- NOTIFICACIONES -->
+        <div id="notifications" class="notifications-container"></div>
+
+        <!-- DASHBOARD -->
+        <section class="dashboard">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Productos en Stock</h3>
+                    <div class="card-icon primary">📦</div>
+                </div>
+                <div class="card-value" id="totalProductos">0</div>
+                <div class="card-title">Productos registrados</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Stock Bajo</h3>
+                    <div class="card-icon warning">⚠️</div>
+                </div>
+                <div class="card-value" id="stockBajo">0</div>
+                <div class="card-title">Productos con stock bajo</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Agotados</h3>
+                    <div class="card-icon danger">❌</div>
+                </div>
+                <div class="card-value" id="stockAgotado">0</div>
+                <div class="card-title">Productos agotados</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Categorías</h3>
+                    <div class="card-icon success">🏷️</div>
+                </div>
+                <div class="card-value" id="totalCategorias">0</div>
+                <div class="card-title">Categorías activas</div>
+            </div>
+        </section>
+
+        <!-- TABLA DE PRODUCTOS -->
+        <section>
+            <div class="section-header">
+                <h3>Productos Recientes</h3>
+                <div class="table-actions">
+                    <input type="text" id="searchInput" placeholder="Buscar productos..." class="search-input">
+                    <button class="btn btn-sm" id="btnExport">Exportar</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <div class="table-loading" id="tableLoading">
+                    <div class="spinner"></div>
+                    <p>Cargando productos...</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-sort="nombre">Producto ↗</th>
+                            <th data-sort="categoria">Categoría</th>
+                            <th data-sort="precio">Precio</th>
+                            <th data-sort="stock">Stock</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaProductos">
+                        <!-- Los productos se cargarán dinámicamente con JavaScript -->
+                    </tbody>
+                </table>
+                <div class="table-empty" id="tableEmpty" style="display: none;">
+                    <p>No se encontraron productos</p>
+                </div>
+            </div>
+            <div class="pagination" id="pagination">
+                <!-- Paginación generada dinámicamente -->
+            </div>
+        </section>
+
+        <!-- MODAL FORMULARIO PRODUCTO -->
+        <div id="modalProducto" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Nuevo Producto</h3>
+                    <button class="btn-close" id="btnCloseModal">&times;</button>
+                </div>
+                <form id="productForm" class="modal-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nombre">Nombre del Producto *</label>
+                            <input type="text" id="nombre" name="nombre" required maxlength="100">
+                            <span class="error-message" id="errorNombre"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="categoria">Categoría *</label>
+                            <select id="categoria" name="categoria" required>
+                                <option value="">Seleccione una categoría</option>
+                            </select>
+                            <span class="error-message" id="errorCategoria"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="precio">Precio Unitario ($) *</label>
+                            <input type="number" id="precio" name="precio" min="0" step="0.01" required>
+                            <span class="error-message" id="errorPrecio"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="stock">Stock Actual *</label>
+                            <input type="number" id="stock" name="stock" min="0" required>
+                            <span class="error-message" id="errorStock"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="stockMinimo">Stock Mínimo *</label>
+                            <input type="number" id="stockMinimo" name="stockMinimo" min="0" required>
+                            <span class="error-message" id="errorStockMinimo"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="proveedor">Proveedor</label>
+                        <select id="proveedor" name="proveedor">
+                            <option value="">Seleccione un proveedor</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="descripcion">Descripción</label>
+                        <textarea id="descripcion" name="descripcion" rows="3" maxlength="500"></textarea>
+                        <div class="char-counter"><span id="descripcionCounter">0</span>/500</div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn" id="btnCancelar">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="btnSubmit">
+                            <span class="btn-loading" id="btnLoading" style="display: none;"></span>
+                            <span id="btnText">Guardar Producto</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL CONFIRMACIÓN -->
+        <div id="modalConfirm" class="modal">
+            <div class="modal-content confirm-modal">
+                <div class="modal-header">
+                    <h3>Confirmar acción</h3>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmMessage">¿Está seguro de que desea realizar esta acción?</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" id="btnConfirmCancel">Cancelar</button>
+                    <button class="btn btn-danger" id="btnConfirmAccept">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="copyright">
+                    &copy; 2025 Sushi House - Sistema de Inventario para Restaurantes
+                </div>
+                <div class="footer-links">
+                    <a href="pages/configuracion.html">Configuración</a>
+                    <a href="#">Términos de uso</a>
+                    <a href="#">Política de privacidad</a>
+                    <a href="#">Soporte</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/storage.js"></script>
+    <script src="js/validation.js"></script>
+    <script src="js/script.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>

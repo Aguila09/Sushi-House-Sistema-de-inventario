@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Proveedores - RestoControl</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/loading.css">
+</head>
+<body>
+    <!-- LOADING SCREEN -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Cargando Proveedores...</p>
+    </div>
+
+    <!-- HEADER -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🍽️</span>
+                    <h1>RestoControl</h1>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="../index.html">Inicio</a></li>
+                        <li><a href="productos.html">Productos</a></li>
+                        <li><a href="categorias.html">Categorías</a></li>
+                        <li><a href="proveedores.html" class="active">Proveedores</a></li>
+                        <li><a href="usuarios.html">Usuarios</a></li>
+                        <li><a href="reportes.html">Reportes</a></li>
+                    </ul>
+                </nav>
+                <div class="user-menu">
+                    <div class="user-info">
+                        <div class="avatar">AM</div>
+                        <span id="userName">Admin Manager</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline" id="btnLogout">Cerrar Sesión</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="container">
+        <div class="page-title">
+            <h2>Gestión de Proveedores</h2>
+            <button class="btn btn-primary" id="btnNuevoProveedor">
+                <span>+</span> Nuevo Proveedor
+            </button>
+        </div>
+
+        <!-- NOTIFICACIONES -->
+        <div id="notifications" class="notifications-container"></div>
+
+        <!-- DASHBOARD PROVEEDORES -->
+        <section class="dashboard">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Total Proveedores</h3>
+                    <div class="card-icon primary">🏢</div>
+                </div>
+                <div class="card-value" id="totalProveedores">0</div>
+                <div class="card-title">Proveedores activos</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Productos Suministrados</h3>
+                    <div class="card-icon success">📦</div>
+                </div>
+                <div class="card-value" id="totalProductosProveedores">0</div>
+                <div class="card-title">Productos de proveedores</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Proveedores Destacados</h3>
+                    <div class="card-icon warning">⭐</div>
+                </div>
+                <div class="card-value" id="proveedoresDestacados">0</div>
+                <div class="card-title">Con más productos</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Pedidos Pendientes</h3>
+                    <div class="card-icon danger">📋</div>
+                </div>
+                <div class="card-value" id="pedidosPendientes">0</div>
+                <div class="card-title">Por recibir</div>
+            </div>
+        </section>
+
+        <!-- TABLA DE PROVEEDORES -->
+        <section>
+            <div class="section-header">
+                <h3>Lista de Proveedores</h3>
+                <div class="table-actions">
+                    <input type="text" id="searchInputProveedores" placeholder="Buscar proveedores..." class="search-input">
+                    <button class="btn btn-sm" id="btnExportProveedores">Exportar</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <div class="table-loading" id="tableLoadingProveedores">
+                    <div class="spinner"></div>
+                    <p>Cargando proveedores...</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-sort="nombre">Proveedor ↗</th>
+                            <th data-sort="contacto">Contacto</th>
+                            <th data-sort="telefono">Teléfono</th>
+                            <th data-sort="email">Email</th>
+                            <th data-sort="productos">Productos</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaProveedores">
+                        <!-- Los proveedores se cargarán dinámicamente con JavaScript -->
+                    </tbody>
+                </table>
+                <div class="table-empty" id="tableEmptyProveedores" style="display: none;">
+                    <p>No se encontraron proveedores</p>
+                </div>
+            </div>
+            <div class="pagination" id="paginationProveedores">
+                <!-- Paginación generada dinámicamente -->
+            </div>
+        </section>
+
+        <!-- MODAL FORMULARIO PROVEEDOR -->
+        <div id="modalProveedor" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitleProveedor">Nuevo Proveedor</h3>
+                    <button class="btn-close" id="btnCloseModalProveedor">&times;</button>
+                </div>
+                <form id="proveedorForm" class="modal-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nombreProveedor">Nombre del Proveedor *</label>
+                            <input type="text" id="nombreProveedor" name="nombre" required maxlength="100">
+                            <span class="error-message" id="errorNombreProveedor"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="contactoProveedor">Persona de Contacto *</label>
+                            <input type="text" id="contactoProveedor" name="contacto" required maxlength="100">
+                            <span class="error-message" id="errorContactoProveedor"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="telefonoProveedor">Teléfono *</label>
+                            <input type="tel" id="telefonoProveedor" name="telefono" required>
+                            <span class="error-message" id="errorTelefonoProveedor"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="emailProveedor">Email *</label>
+                            <input type="email" id="emailProveedor" name="email" required>
+                            <span class="error-message" id="errorEmailProveedor"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="direccionProveedor">Dirección</label>
+                        <textarea id="direccionProveedor" name="direccion" rows="2" maxlength="200"></textarea>
+                        <div class="char-counter"><span id="direccionCounter">0</span>/200</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="categoriasProveedor">Categorías de Productos</label>
+                        <select id="categoriasProveedor" name="categorias" multiple style="height: 100px;">
+                            <!-- Las categorías se cargarán dinámicamente -->
+                        </select>
+                        <small>Mantén presionada la tecla Ctrl para seleccionar múltiples categorías</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="estadoProveedor">Estado</label>
+                        <select id="estadoProveedor" name="estado" required>
+                            <option value="activo">Activo</option>
+                            <option value="inactivo">Inactivo</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notasProveedor">Notas Adicionales</label>
+                        <textarea id="notasProveedor" name="notas" rows="3" maxlength="500"></textarea>
+                        <div class="char-counter"><span id="notasCounter">0</span>/500</div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn" id="btnCancelarProveedor">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="btnSubmitProveedor">
+                            <span class="btn-loading" id="btnLoadingProveedor" style="display: none;"></span>
+                            <span id="btnTextProveedor">Guardar Proveedor</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL DETALLES PROVEEDOR -->
+        <div id="modalDetallesProveedor" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitleDetalles">Detalles del Proveedor</h3>
+                    <button class="btn-close" id="btnCloseModalDetalles">&times;</button>
+                </div>
+                <div class="modal-body" id="detallesProveedorContent">
+                    <!-- Los detalles se cargarán dinámicamente -->
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" id="btnCerrarDetalles">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL CONFIRMACIÓN -->
+        <div id="modalConfirm" class="modal">
+            <div class="modal-content confirm-modal">
+                <div class="modal-header">
+                    <h3>Confirmar acción</h3>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmMessage">¿Está seguro de que desea realizar esta acción?</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" id="btnConfirmCancel">Cancelar</button>
+                    <button class="btn btn-danger" id="btnConfirmAccept">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="copyright">
+                    &copy; 2023 RestoControl - Sistema de Inventario para Restaurantes
+                </div>
+                <div class="footer-links">
+                    <a href="configuracion.html">Configuración</a>
+                    <a href="#">Términos de uso</a>
+                    <a href="#">Política de privacidad</a>
+                    <a href="#">Soporte</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/storage.js"></script>
+    <script src="../js/validation.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/proveedores.js"></script>
+</body>
+</html>
