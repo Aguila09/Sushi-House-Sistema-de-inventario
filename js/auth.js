@@ -13,12 +13,23 @@ class AuthSystem {
     checkAuthentication() {
         const currentUser = storage.get('currentUser');
         const token = storage.get('authToken');
-        
+
         if (currentUser && token) {
             this.currentUser = currentUser;
             this.updateUI();
-        } else if (!window.location.pathname.includes('login.html')) {
-            // Redirigir al login si no está autenticado
+            return;
+        }
+
+        // Si ya estamos en la página de login, no redirigir
+        const pathname = window.location.pathname;
+        const isLoginPage = pathname.endsWith('/pages/login.html') || pathname.endsWith('login.html');
+        if (isLoginPage) return;
+
+        // Si estamos dentro de /pages/, redirigir a login relativo (login.html en la misma carpeta)
+        // Si estamos en la raíz, redirigir a pages/login.html
+        if (pathname.includes('/pages/')) {
+            window.location.href = 'login.html';
+        } else {
             window.location.href = 'pages/login.html';
         }
     }
@@ -83,6 +94,7 @@ class AuthSystem {
         
         // Redirigir al dashboard
         setTimeout(() => {
+            // redirigir a la raíz desde la carpeta pages/login.html
             window.location.href = '../index.html';
         }, 1000);
     }
@@ -97,7 +109,13 @@ class AuthSystem {
                 this.showNotification('Sesión cerrada correctamente', 'info');
                 
                 setTimeout(() => {
-                    window.location.href = 'pages/login.html';
+                    // Si estamos en /pages/ quedarnos en login relativo
+                    const pathname = window.location.pathname;
+                    if (pathname.includes('/pages/')) {
+                        window.location.href = 'login.html';
+                    } else {
+                        window.location.href = 'pages/login.html';
+                    }
                 }, 1000);
             }
         );
@@ -117,13 +135,27 @@ class AuthSystem {
     }
 
     updateUI() {
-        const userNameElement = document.getElementById('userName');
-        if (userNameElement && this.currentUser) {
-            userNameElement.textContent = this.currentUser.nombre;
-        }
+        // Nombre a mostrar (orden de preferencia)
+        const name = this.currentUser?.nombre || this.currentUser?.usuario || this.currentUser?.email || 'Usuario';
+
+        // Actualizar todos los elementos que podrían mostrar el nombre
+        document.querySelectorAll('#userName, .username, .user-info span').forEach(el => {
+            el.textContent = name;
+        });
+
+        // Actualizar avatar (iniciales) si existe elemento .user-info .avatar o .avatar
+        const initials = this.getInitials(name);
+        document.querySelectorAll('.user-info .avatar, .avatar, .avatar-small').forEach(av => {
+            av.textContent = initials;
+        });
         
         // Mostrar/ocultar elementos según permisos
         this.updatePermissions();
+    }
+
+    getInitials(nombre) {
+        if (!nombre) return '';
+        return nombre.split(' ').map(n => n[0] || '').join('').toUpperCase().substring(0, 2);
     }
 
     updatePermissions() {
@@ -175,30 +207,26 @@ class AuthSystem {
 
     showConfirmModal(message, onConfirm) {
         // Reutilizar el modal de confirmación principal si está disponible
-        if (window.app && typeof window.app.confirmarEliminacion === 'function') {
-            // Adaptar para usar el sistema principal
-            const originalConfirm = window.app.confirmarEliminacion;
-            window.app.confirmarEliminacion = function() {
+        const modal = document.getElementById('modalConfirm');
+        const messageElement = document.getElementById('confirmMessage');
+        const btnAccept = document.getElementById('btnConfirmAccept');
+
+        if (messageElement) messageElement.textContent = message;
+
+        if (modal && btnAccept) {
+            // clonar para limpiar handlers previos
+            const newBtn = btnAccept.cloneNode(true);
+            btnAccept.parentNode.replaceChild(newBtn, btnAccept);
+            newBtn.addEventListener('click', () => {
                 onConfirm();
-                window.app.confirmarEliminacion = originalConfirm;
-            };
-            const modal = document.getElementById('modalConfirm');
-            const messageElement = document.getElementById('confirmMessage');
-            const btnAccept = document.getElementById('btnConfirmAccept');
-            
-            messageElement.textContent = message;
-            
-            // Remover event listeners previos
-            const newBtnAccept = btnAccept.cloneNode(true);
-            btnAccept.parentNode.replaceChild(newBtnAccept, btnAccept);
-            
+                modal.classList.remove('show');
+            });
             modal.classList.add('show');
-        } else {
-            // Sistema básico de confirmación
-            if (confirm(message)) {
-                onConfirm();
-            }
+            return;
         }
+
+        // Fallback simple
+        if (confirm(message)) onConfirm();
     }
 
     // Métodos de verificación de permisos

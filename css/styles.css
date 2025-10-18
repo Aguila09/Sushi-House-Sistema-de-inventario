@@ -618,35 +618,6 @@ tr:hover {
     display: inline-block;
 }
 
-/* FOOTER */
-footer {
-    background-color: var(--primary);
-    color: white;
-    padding: 20px 0;
-    margin-top: 40px;
-}
-
-.footer-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.footer-links {
-    display: flex;
-    gap: 20px;
-}
-
-.footer-links a {
-    color: white;
-    text-decoration: none;
-    transition: color 0.3s;
-}
-
-.footer-links a:hover {
-    color: var(--secondary);
-}
-
 /* RESPONSIVE */
 @media (max-width: 768px) {
     .header-content {
@@ -683,12 +654,6 @@ footer {
 
     .form-row {
         grid-template-columns: 1fr;
-    }
-
-    .footer-content {
-        flex-direction: column;
-        gap: 15px;
-        text-align: center;
     }
 
     .modal-content {
