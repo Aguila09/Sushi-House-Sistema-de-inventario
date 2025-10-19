@@ -48,6 +48,7 @@ configuracion.html
 - Configuración de notificaciones
 
 login.html
+
 - Página de inicio de sesión del sistema
 - Contiene los siguientes elementos principales:
     - Formulario de login con:
@@ -102,13 +103,13 @@ validation.js
 - Reglas de validación
 - Mensajes de error
 
-- usuarios.js
+usuarios.js
 
 - Lógica específica para gestión de usuarios
 - CRUD de usuarios
 - Permisos y roles
 
-- proveedores.js
+proveedores.js
 
 - Lógica específica para gestión de proveedores
 - CRUD de proveedores

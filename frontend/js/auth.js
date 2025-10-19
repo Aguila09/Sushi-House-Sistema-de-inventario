@@ -22,16 +22,11 @@ class AuthSystem {
 
         // Si ya estamos en la página de login, no redirigir
         const pathname = window.location.pathname;
-        const isLoginPage = pathname.endsWith('/pages/login.html') || pathname.endsWith('login.html');
+        const isLoginPage = pathname.endsWith('/frontend/login.html') || pathname.endsWith('login.html');
         if (isLoginPage) return;
 
-        // Si estamos dentro de /pages/, redirigir a login relativo (login.html en la misma carpeta)
-        // Si estamos en la raíz, redirigir a pages/login.html
-        if (pathname.includes('/pages/')) {
-            window.location.href = 'login.html';
-        } else {
-            window.location.href = 'pages/login.html';
-        }
+        // Redirigir a login.html en frontend
+        window.location.href = 'login.html';
     }
 
     bindAuthEvents() {
@@ -92,10 +87,9 @@ class AuthSystem {
         
         this.showNotification(`Bienvenido, ${user.nombre}`, 'success');
         
-        // Redirigir al dashboard
+        // Redirigir al dashboard (index.html en frontend)
         setTimeout(() => {
-            // redirigir a la raíz desde la carpeta pages/login.html
-            window.location.href = '../index.html';
+            window.location.href = 'index.html';
         }, 1000);
     }
 
@@ -109,13 +103,8 @@ class AuthSystem {
                 this.showNotification('Sesión cerrada correctamente', 'info');
                 
                 setTimeout(() => {
-                    // Si estamos en /pages/ quedarnos en login relativo
-                    const pathname = window.location.pathname;
-                    if (pathname.includes('/pages/')) {
-                        window.location.href = 'login.html';
-                    } else {
-                        window.location.href = 'pages/login.html';
-                    }
+                    // Redirigir a login.html en frontend
+                    window.location.href = 'login.html';
                 }, 1000);
             }
         );
