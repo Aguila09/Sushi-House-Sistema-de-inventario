@@ -629,7 +629,7 @@ class ProveedoresManager {
     exportData() {
         const proveedores = storage.getProveedores();
         const csvContent = this.convertToCSV(proveedores);
-        this.downloadCSV(csvContent, 'proveedores_restocontrol.csv');
+        this.downloadCSV(csvContent, 'proveedores_sushihouse.csv');
         this.showNotification('Datos exportados correctamente', 'success');
     }
 

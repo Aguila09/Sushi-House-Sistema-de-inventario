@@ -292,7 +292,7 @@ class ConfiguracionManager {
             const a = document.createElement('a');
             
             a.href = url;
-            a.download = `backup_restocontrol_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `backup_sushihouse_${new Date().toISOString().split('T')[0]}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

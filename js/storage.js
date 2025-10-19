@@ -1,7 +1,7 @@
 // Sistema de almacenamiento local mejorado
 class StorageManager {
     constructor() {
-        this.prefix = 'restocontrol_';
+        this.prefix = 'sushihouse_';
         this.defaultData = {
             productos: [
                 { id: 1, nombre: "Filete de Res", categoria: "carnes", precio: 25.50, stock: 45, stockMinimo: 10, proveedor: "Carnicería Premium", descripcion: "Filete de res premium para parrilla" },
@@ -28,7 +28,7 @@ class StorageManager {
                 { id: 5, nombre: "Bodegas Selectas", contacto: "Pedro Martínez", telefono: "+34 600 567 890", email: "pedro@bodegasselectas.com", direccion: "Carretera del Vino km. 12, La Rioja" }
             ],
             usuarios: [
-                { id: 1, nombre: "Admin Manager", email: "admin@restocontrol.com", rol: "admin", estado: "activo", ultimoAcceso: new Date().toISOString() },
+                { id: 1, nombre: "Admin Manager", email: "admin@sushihouse.com", rol: "admin", estado: "activo", ultimoAcceso: new Date().toISOString() },
                 { id: 2, nombre: "María González", email: "maria@restaurant.com", rol: "usuario", estado: "activo", ultimoAcceso: new Date().toISOString() }
             ],
             configuracion: {
@@ -56,7 +56,7 @@ class StorageManager {
                 usuario: "admin",
                 password: "admin123",
                 rol: "admin",
-                email: "admin@restocontrol.com",
+                email: "admin@sushihouse.com",
                 activo: true
             }]);
         }

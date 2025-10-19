@@ -549,7 +549,7 @@ class UsuariosManager {
     exportData() {
         const usuarios = storage.getUsuarios();
         const csvContent = this.convertToCSV(usuarios);
-        this.downloadCSV(csvContent, 'usuarios_restocontrol.csv');
+        this.downloadCSV(csvContent, 'usuarios_sushihouse.csv');
         this.showNotification('Datos exportados correctamente', 'success');
     }
 

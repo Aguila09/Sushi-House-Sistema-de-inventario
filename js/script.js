@@ -1,5 +1,5 @@
 // Sistema principal de la aplicación
-class RestoControlApp {
+class SushiHouseApp {
     constructor() {
         this.currentPage = 1;
         this.itemsPerPage = 10;
@@ -469,7 +469,7 @@ class RestoControlApp {
     exportData() {
         const productos = storage.getProductos();
         const csvContent = this.convertToCSV(productos);
-        this.downloadCSV(csvContent, 'productos_restocontrol.csv');
+        this.downloadCSV(csvContent, 'productos_sushihouse.csv');
         this.showNotification('Datos exportados correctamente', 'success');
     }
 
@@ -555,5 +555,5 @@ class RestoControlApp {
 // Inicializar la aplicación cuando el DOM esté listo
 let app;
 document.addEventListener('DOMContentLoaded', () => {
-    app = new RestoControlApp();
+    app = new SushiHouseApp();
 });
