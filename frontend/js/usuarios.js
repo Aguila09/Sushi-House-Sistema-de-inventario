@@ -3,9 +3,10 @@ class UsuariosManager {
     constructor() {
         this.currentPage = 1;
         this.itemsPerPage = 10;
-        this.currentSort = { field: 'nombre', direction: 'asc' };
+        this.currentSort = { field: 'first_name', direction: 'asc' };
         this.currentUsuarioId = null;
         this.isEditing = false;
+        this.api = apiClient;
         this.init();
     }
 
@@ -16,24 +17,13 @@ class UsuariosManager {
     }
 
     bindEvents() {
-        // Botones principales
         document.getElementById('btnNuevoUsuario')?.addEventListener('click', () => this.showUsuarioForm());
         document.getElementById('btnCancelarUsuario')?.addEventListener('click', () => this.hideUsuarioForm());
         document.getElementById('btnCloseModalUsuario')?.addEventListener('click', () => this.hideUsuarioForm());
         document.getElementById('btnExportUsuarios')?.addEventListener('click', () => this.exportData());
-
-        // Formulario
         document.getElementById('usuarioForm')?.addEventListener('submit', (e) => this.handleFormSubmit(e));
-
-        // Mostrar/ocultar campos de contraseña según edición
-        document.getElementById('modalUsuario')?.addEventListener('show', () => {
-            this.togglePasswordFields();
-        });
-
-        // Modal de confirmación
         document.getElementById('btnConfirmCancel')?.addEventListener('click', () => this.hideConfirmModal());
         
-        // Cerrar modal al hacer clic fuera
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
                 this.hideUsuarioForm();
@@ -41,21 +31,30 @@ class UsuariosManager {
             }
         });
 
-        // Ordenamiento de tabla
         document.querySelectorAll('th[data-sort]').forEach(th => {
             th.addEventListener('click', () => this.handleSort(th.dataset.sort));
         });
     }
 
-    loadInitialData() {
+    async loadInitialData() {
         this.showLoading();
         
-        // Simular carga de datos
-        setTimeout(() => {
-            this.renderDashboard();
-            this.renderUsuariosTable();
+        try {
+            // usar allSettled para evitar que una promesa lenta bloquee todo
+            const results = await Promise.allSettled([
+                this.renderDashboard(),
+                this.renderUsuariosTable()
+            ]);
+            results.forEach((r, idx) => {
+                if (r.status === 'rejected') {
+                    console.error(`loadInitialData: task ${idx} failed:`, r.reason);
+                }
+            });
+        } catch (error) {
+            console.error('Error loading initial data:', error);
+        } finally {
             this.hideLoading();
-        }, 1000);
+        }
     }
 
     showLoading() {
@@ -90,37 +89,40 @@ class UsuariosManager {
         }
     }
 
-    renderDashboard() {
-        const usuarios = storage.getUsuarios();
-        
-        const totalUsuarios = usuarios.length;
-        const totalAdministradores = usuarios.filter(u => u.rol === 'admin').length;
-        const usuariosActivos = usuarios.filter(u => u.estado === 'activo').length;
-        
-        // Calcular accesos de hoy (simulado)
-        const hoy = new Date().toDateString();
-        const accesosHoy = usuarios.filter(u => {
-            if (!u.ultimoAcceso) return false;
-            const ultimoAccesoDate = new Date(u.ultimoAcceso).toDateString();
-            return ultimoAccesoDate === hoy;
-        }).length;
+    async renderDashboard() {
+        try {
+            const usuarios = await this.api.get('/usuarios/');
+            
+            const totalUsuarios = usuarios.length;
+            const totalAdministradores = usuarios.filter(u => u.is_staff).length;
+            const usuariosActivos = usuarios.filter(u => u.is_active).length;
+            
+            const hoy = new Date().toDateString();
+            const accesosHoy = usuarios.filter(u => {
+                if (!u.last_login) return false;
+                const ultimoAccesoDate = new Date(u.last_login).toDateString();
+                return ultimoAccesoDate === hoy;
+            }).length;
 
-        document.getElementById('totalUsuarios').textContent = totalUsuarios;
-        document.getElementById('totalAdministradores').textContent = totalAdministradores;
-        document.getElementById('usuariosActivos').textContent = usuariosActivos;
-        document.getElementById('accesosHoy').textContent = accesosHoy;
+            document.getElementById('totalUsuarios').textContent = totalUsuarios;
+            document.getElementById('totalAdministradores').textContent = totalAdministradores;
+            document.getElementById('usuariosActivos').textContent = usuariosActivos;
+            document.getElementById('accesosHoy').textContent = accesosHoy;
+        } catch (error) {
+            console.error('Error loading user dashboard:', error);
+        }
     }
 
-    renderUsuariosTable(usuarios = null) {
+    async renderUsuariosTable(usuarios = null) {
         this.showTableLoading();
         
-        setTimeout(() => {
+        try {
+            const usuariosToRender = usuarios || await this.api.get('/usuarios/');
             const tablaBody = document.getElementById('tablaUsuarios');
             const tableEmpty = document.getElementById('tableEmptyUsuarios');
             
             if (!tablaBody) return;
 
-            const usuariosToRender = usuarios || storage.getUsuarios();
             const startIndex = (this.currentPage - 1) * this.itemsPerPage;
             const endIndex = startIndex + this.itemsPerPage;
             const paginatedUsuarios = usuariosToRender.slice(startIndex, endIndex);
@@ -128,29 +130,31 @@ class UsuariosManager {
             tablaBody.innerHTML = '';
 
             if (paginatedUsuarios.length === 0) {
-                tableEmpty.style.display = 'block';
+                if (tableEmpty) tableEmpty.style.display = 'block';
                 this.renderPagination(0);
-                this.hideTableLoading();
                 return;
             }
 
-            tableEmpty.style.display = 'none';
+            if (tableEmpty) tableEmpty.style.display = 'none';
 
-            paginatedUsuarios.forEach(usuario => {
-                const estado = usuario.estado || 'activo';
-                const ultimoAcceso = usuario.ultimoAcceso ? 
-                    new Date(usuario.ultimoAcceso).toLocaleString() : 'Nunca';
+            for (const usuario of paginatedUsuarios) {
+                const estado = usuario.is_active ? 'activo' : 'inactivo';
+                const ultimoAcceso = usuario.last_login ? 
+                    new Date(usuario.last_login).toLocaleString() : 'Nunca';
+                const nombreCompleto = usuario.first_name && usuario.last_name 
+                    ? `${usuario.first_name} ${usuario.last_name}`
+                    : usuario.username;
                 
                 const fila = document.createElement('tr');
                 fila.innerHTML = `
                     <td>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <div class="avatar-small" style="background-color: ${this.getAvatarColor(usuario.nombre)}">${this.getInitials(usuario.nombre)}</div>
-                            <strong>${this.escapeHtml(usuario.nombre)}</strong>
+                            <div class="avatar-small" style="background-color: ${this.getAvatarColor(nombreCompleto)}">${this.getInitials(nombreCompleto)}</div>
+                            <strong>${this.escapeHtml(nombreCompleto)}</strong>
                         </div>
                     </td>
                     <td>${usuario.email}</td>
-                    <td><span class="status ${this.getRolClass(usuario.rol)}">${this.getRolText(usuario.rol)}</span></td>
+                    <td><span class="status ${this.getRolClass(usuario)}">${this.getRolText(usuario)}</span></td>
                     <td>${ultimoAcceso}</td>
                     <td><span class="status ${estado === 'activo' ? 'in-stock' : 'out-of-stock'}">${estado === 'activo' ? 'Activo' : 'Inactivo'}</span></td>
                     <td class="actions">
@@ -159,11 +163,15 @@ class UsuariosManager {
                     </td>
                 `;
                 tablaBody.appendChild(fila);
-            });
+            }
 
             this.renderPagination(usuariosToRender.length);
+        } catch (error) {
+            console.error('Error loading users:', error);
+        } finally {
+            // Aseguramos que el spinner de tabla siempre se oculte
             this.hideTableLoading();
-        }, 500);
+        }
     }
 
     getAvatarColor(nombre) {
@@ -176,22 +184,16 @@ class UsuariosManager {
         return nombre.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     }
 
-    getRolClass(rol) {
-        const classes = {
-            'admin': 'in-stock',
-            'usuario': 'low-stock',
-            'visor': 'out-of-stock'
-        };
-        return classes[rol] || 'out-of-stock';
+    getRolClass(usuario) {
+        if (usuario.is_superuser) return 'in-stock';
+        if (usuario.is_staff) return 'low-stock';
+        return 'out-of-stock';
     }
 
-    getRolText(rol) {
-        const texts = {
-            'admin': 'Administrador',
-            'usuario': 'Usuario',
-            'visor': 'Visor'
-        };
-        return texts[rol] || rol;
+    getRolText(usuario) {
+        if (usuario.is_superuser) return 'Super Admin';
+        if (usuario.is_staff) return 'Administrador';
+        return 'Usuario';
     }
 
     renderPagination(totalItems) {
@@ -207,11 +209,9 @@ class UsuariosManager {
 
         let paginationHTML = '';
         
-        // Botón anterior
         paginationHTML += `<button class="page-btn ${this.currentPage === 1 ? 'disabled' : ''}" 
             ${this.currentPage === 1 ? 'disabled' : ''} onclick="usuariosManager.changePage(${this.currentPage - 1})">« Anterior</button>`;
         
-        // Páginas
         for (let i = 1; i <= totalPages; i++) {
             if (i === 1 || i === totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
                 paginationHTML += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" 
@@ -221,7 +221,6 @@ class UsuariosManager {
             }
         }
         
-        // Botón siguiente
         paginationHTML += `<button class="page-btn ${this.currentPage === totalPages ? 'disabled' : ''}" 
             ${this.currentPage === totalPages ? 'disabled' : ''} onclick="usuariosManager.changePage(${this.currentPage + 1})">Siguiente »</button>`;
         
@@ -229,9 +228,6 @@ class UsuariosManager {
     }
 
     changePage(page) {
-        const totalPages = Math.ceil(storage.getUsuarios().length / this.itemsPerPage);
-        if (page < 1 || page > totalPages) return;
-        
         this.currentPage = page;
         this.renderUsuariosTable();
     }
@@ -244,37 +240,13 @@ class UsuariosManager {
             this.currentSort.direction = 'asc';
         }
 
-        const usuarios = storage.getUsuarios();
-        const sortedUsuarios = this.sortUsuarios(usuarios, this.currentSort.field, this.currentSort.direction);
-        this.renderUsuariosTable(sortedUsuarios);
+        this.renderUsuariosTable();
         
-        // Actualizar indicador visual en el header
         document.querySelectorAll('th[data-sort]').forEach(th => {
             th.innerHTML = th.innerHTML.replace(' ↗', '').replace(' ↘', '');
             if (th.dataset.sort === field) {
                 th.innerHTML += this.currentSort.direction === 'asc' ? ' ↗' : ' ↘';
             }
-        });
-    }
-
-    sortUsuarios(usuarios, field, direction) {
-        return [...usuarios].sort((a, b) => {
-            let aValue = a[field];
-            let bValue = b[field];
-            
-            if (field === 'ultimoAcceso') {
-                aValue = aValue ? new Date(aValue) : new Date(0);
-                bValue = bValue ? new Date(bValue) : new Date(0);
-            }
-            
-            if (typeof aValue === 'string') {
-                aValue = aValue.toLowerCase();
-                bValue = bValue.toLowerCase();
-            }
-            
-            if (aValue < bValue) return direction === 'asc' ? -1 : 1;
-            if (aValue > bValue) return direction === 'asc' ? 1 : -1;
-            return 0;
         });
     }
 
@@ -291,15 +263,14 @@ class UsuariosManager {
         }
     }
 
-    handleSearch(termino) {
+    async handleSearch(termino) {
         this.currentPage = 1;
-        const usuarios = storage.getUsuarios();
-        const usuariosFiltrados = usuarios.filter(usuario => 
-            usuario.nombre.toLowerCase().includes(termino.toLowerCase()) ||
-            usuario.email.toLowerCase().includes(termino.toLowerCase()) ||
-            usuario.rol.toLowerCase().includes(termino.toLowerCase())
-        );
-        this.renderUsuariosTable(usuariosFiltrados);
+        try {
+            const usuarios = await this.api.get(`/usuarios/?search=${termino}`);
+            this.renderUsuariosTable(usuarios);
+        } catch (error) {
+            console.error('Error searching users:', error);
+        }
     }
 
     showUsuarioForm(usuario = null) {
@@ -322,7 +293,6 @@ class UsuariosManager {
         validator.clearFieldErrors(form);
         modal.classList.add('show');
         
-        // Configurar validación en tiempo real
         validator.setupRealTimeValidation(form);
     }
 
@@ -350,19 +320,11 @@ class UsuariosManager {
     }
 
     populateForm(usuario) {
-        document.getElementById('nombreUsuario').value = usuario.nombre || '';
+        document.getElementById('nombreUsuario').value = usuario.first_name || '';
         document.getElementById('emailUsuario').value = usuario.email || '';
-        document.getElementById('rolUsuario').value = usuario.rol || '';
-        document.getElementById('estadoUsuario').value = usuario.estado || 'activo';
+        document.getElementById('rolUsuario').value = usuario.is_staff ? 'admin' : 'usuario';
+        document.getElementById('estadoUsuario').value = usuario.is_active ? 'activo' : 'inactivo';
         document.getElementById('telefonoUsuario').value = usuario.telefono || '';
-        
-        // Seleccionar permisos
-        if (usuario.permisos) {
-            const checkboxes = document.querySelectorAll('input[name="permisos"]');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = usuario.permisos.includes(checkbox.value);
-            });
-        }
     }
 
     async handleFormSubmit(e) {
@@ -372,14 +334,10 @@ class UsuariosManager {
         const formData = new FormData(form);
         const usuarioData = Object.fromEntries(formData.entries());
         
-        // Procesar permisos múltiples
-        usuarioData.permisos = Array.from(formData.getAll('permisos'));
-        
         if (this.isEditing) {
             usuarioData.id = this.currentUsuarioId;
         }
 
-        // Validar
         const validation = validator.validateUsuario(usuarioData);
         if (!validation.isValid) {
             validator.showFieldErrors(form, validation.errors);
@@ -387,18 +345,14 @@ class UsuariosManager {
             return;
         }
 
-        // Mostrar loading en el botón
         this.setFormLoading(true);
 
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
             let resultado;
             if (this.isEditing) {
-                resultado = this.actualizarUsuario(this.currentUsuarioId, usuarioData);
+                resultado = await this.api.put(`/usuarios/${this.currentUsuarioId}/`, usuarioData);
             } else {
-                resultado = this.agregarUsuario(usuarioData);
+                resultado = await this.api.post('/usuarios/', usuarioData);
             }
 
             if (resultado) {
@@ -435,83 +389,22 @@ class UsuariosManager {
         }
     }
 
-    agregarUsuario(usuarioData) {
-        const usuarios = storage.getUsuarios();
-        const nuevoId = usuarios.length > 0 ? Math.max(...usuarios.map(u => u.id)) + 1 : 1;
-        
-        const nuevoUsuario = {
-            id: nuevoId,
-            ...usuarioData,
-            fechaCreacion: new Date().toISOString(),
-            // En un sistema real, aquí se haría hash de la contraseña
-            contrasenaHash: btoa(usuarioData.contrasena) // Solo para demo, NO usar en producción
-        };
-        
-        // Eliminar la contraseña en texto plano
-        delete nuevoUsuario.contrasena;
-        delete nuevoUsuario.confirmarContrasena;
-        
-        usuarios.push(nuevoUsuario);
-        return storage.setUsuarios(usuarios) ? nuevoUsuario : null;
-    }
-
-    actualizarUsuario(id, datosActualizados) {
-        const usuarios = storage.getUsuarios();
-        const index = usuarios.findIndex(u => u.id === id);
-        if (index !== -1) {
-            const usuarioActualizado = { 
-                ...usuarios[index], 
-                ...datosActualizados, 
-                fechaActualizacion: new Date().toISOString() 
-            };
-            
-            // Si se está editando y no se cambió la contraseña, mantener la actual
-            if (!datosActualizados.contrasena) {
-                delete usuarioActualizado.contrasena;
-                delete usuarioActualizado.confirmarContrasena;
-            } else {
-                // En un sistema real, aquí se haría hash de la nueva contraseña
-                usuarioActualizado.contrasenaHash = btoa(datosActualizados.contrasena);
+    async editarUsuario(id) {
+        try {
+            const usuario = await this.api.get(`/usuarios/${id}/`);
+            if (usuario) {
+                this.showUsuarioForm(usuario);
             }
-            
-            usuarios[index] = usuarioActualizado;
-            return storage.setUsuarios(usuarios);
-        }
-        return false;
-    }
-
-    editarUsuario(id) {
-        const usuarios = storage.getUsuarios();
-        const usuario = usuarios.find(u => u.id === id);
-        if (usuario) {
-            this.showUsuarioForm(usuario);
+        } catch (error) {
+            this.showNotification('Error al cargar el usuario: ' + error.message, 'error');
         }
     }
 
     confirmarEliminacion(id) {
-        const usuarios = storage.getUsuarios();
-        const usuario = usuarios.find(u => u.id === id);
-        
-        if (!usuario) return;
-
-        // No permitir eliminar al usuario admin principal
-        if (id === 1) {
-            this.showNotification('No se puede eliminar el usuario administrador principal', 'error');
-            return;
-        }
-
-        const modal = document.getElementById('modalConfirm');
-        const message = document.getElementById('confirmMessage');
-        const btnAccept = document.getElementById('btnConfirmAccept');
-        
-        message.textContent = `¿Está seguro de que desea eliminar al usuario "${usuario.nombre}"? Esta acción no se puede deshacer.`;
-        
-        // Remover event listeners previos
-        const newBtnAccept = btnAccept.cloneNode(true);
-        btnAccept.parentNode.replaceChild(newBtnAccept, btnAccept);
-        
-        newBtnAccept.addEventListener('click', () => this.eliminarUsuario(id));
-        modal.classList.add('show');
+        this.showConfirmModal(
+            `¿Está seguro de que desea eliminar este usuario? Esta acción no se puede deshacer.`,
+            () => this.eliminarUsuario(id)
+        );
     }
 
     hideConfirmModal() {
@@ -523,34 +416,24 @@ class UsuariosManager {
         this.hideConfirmModal();
         
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            const resultado = this.eliminarUsuarioStorage(id);
-            
-            if (resultado) {
-                this.showNotification('Usuario eliminado correctamente', 'success');
-                this.renderDashboard();
-                this.renderUsuariosTable();
-            } else {
-                throw new Error('Error al eliminar el usuario');
-            }
+            await this.api.delete(`/usuarios/${id}/`);
+            this.showNotification('Usuario eliminado correctamente', 'success');
+            this.renderDashboard();
+            this.renderUsuariosTable();
         } catch (error) {
             this.showNotification('Error al eliminar el usuario: ' + error.message, 'error');
         }
     }
 
-    eliminarUsuarioStorage(id) {
-        const usuarios = storage.getUsuarios();
-        const nuevosUsuarios = usuarios.filter(u => u.id !== id);
-        return storage.setUsuarios(nuevosUsuarios);
-    }
-
-    exportData() {
-        const usuarios = storage.getUsuarios();
-        const csvContent = this.convertToCSV(usuarios);
-        this.downloadCSV(csvContent, 'usuarios_sushihouse.csv');
-        this.showNotification('Datos exportados correctamente', 'success');
+    async exportData() {
+        try {
+            const usuarios = await this.api.get('/usuarios/');
+            const csvContent = this.convertToCSV(usuarios);
+            this.downloadCSV(csvContent, 'usuarios_sushihouse.csv');
+            this.showNotification('Datos exportados correctamente', 'success');
+        } catch (error) {
+            this.showNotification('Error al exportar datos: ' + error.message, 'error');
+        }
     }
 
     convertToCSV(data) {
@@ -560,13 +443,16 @@ class UsuariosManager {
         const csvRows = [headers.join(',')];
         
         data.forEach(item => {
+            const nombreCompleto = item.first_name && item.last_name 
+                ? `${item.first_name} ${item.last_name}`
+                : item.username;
             const row = [
-                `"${item.nombre}"`,
+                `"${nombreCompleto}"`,
                 `"${item.email}"`,
-                `"${this.getRolText(item.rol)}"`,
-                `"${item.estado}"`,
+                `"${this.getRolText(item)}"`,
+                `"${item.is_active ? 'Activo' : 'Inactivo'}"`,
                 `"${item.telefono || ''}"`,
-                `"${item.ultimoAcceso ? new Date(item.ultimoAcceso).toLocaleString() : 'Nunca'}"`
+                `"${item.last_login ? new Date(item.last_login).toLocaleString() : 'Nunca'}"`
             ];
             csvRows.push(row.join(','));
         });
@@ -602,7 +488,6 @@ class UsuariosManager {
         
         container.appendChild(notification);
         
-        // Auto-remover después de 5 segundos
         setTimeout(() => {
             if (notification.parentElement) {
                 notification.remove();
@@ -631,7 +516,6 @@ class UsuariosManager {
     }
 }
 
-// Inicializar el manager de usuarios
 let usuariosManager;
 document.addEventListener('DOMContentLoaded', () => {
     usuariosManager = new UsuariosManager();

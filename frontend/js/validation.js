@@ -231,3 +231,8 @@ class ValidationSystem {
 
 // Instancia global del sistema de validación
 const validator = new ValidationSystem();
+
+// Exponer para que index.html u otros scripts lo detecten
+window.ValidationSystem = ValidationSystem;
+window.validator = validator;
+console.log('validation.js cargado — ValidationSystem y validator expuestos en window.');

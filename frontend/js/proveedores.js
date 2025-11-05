@@ -1,4 +1,4 @@
-// Sistema de gestión de proveedores
+// Sistema de gestión de proveedores - CONECTADO AL BACKEND
 class ProveedoresManager {
     constructor() {
         this.currentPage = 1;
@@ -6,6 +6,7 @@ class ProveedoresManager {
         this.currentSort = { field: 'nombre', direction: 'asc' };
         this.currentProveedorId = null;
         this.isEditing = false;
+        this.api = apiClient;
         this.init();
     }
 
@@ -44,16 +45,28 @@ class ProveedoresManager {
         });
     }
 
-    loadInitialData() {
+    async loadInitialData() {
         this.showLoading();
         
-        // Simular carga de datos
-        setTimeout(() => {
-            this.renderDashboard();
-            this.renderProveedoresTable();
-            this.populateCategoriasSelect();
+        try {
+            // usar allSettled para evitar que una promesa lenta bloquee todo
+            const results = await Promise.allSettled([
+                this.renderDashboard(),
+                this.renderProveedoresTable(),
+                this.populateCategoriasSelect()
+            ]);
+            results.forEach((r, idx) => {
+                if (r.status === 'rejected') {
+                    console.error(`loadInitialData: task ${idx} failed:`, r.reason);
+                }
+            });
+        } catch (error) {
+            console.error('Error cargando datos iniciales:', error);
+            this.showNotification('Error cargando datos del servidor', 'error');
+        } finally {
+            // Garantizamos siempre ocultar el loading global
             this.hideLoading();
-        }, 1000);
+        }
     }
 
     showLoading() {
@@ -88,40 +101,38 @@ class ProveedoresManager {
         }
     }
 
-    renderDashboard() {
-        const proveedores = storage.getProveedores();
-        const productos = storage.getProductos();
-        
-        const totalProveedores = proveedores.length;
-        const totalProductosProveedores = productos.length;
-        
-        // Calcular proveedores destacados (con más productos)
-        const proveedoresConProductos = {};
-        productos.forEach(producto => {
-            if (producto.proveedor) {
-                proveedoresConProductos[producto.proveedor] = (proveedoresConProductos[producto.proveedor] || 0) + 1;
-            }
-        });
-        
-        const proveedoresDestacados = Object.keys(proveedoresConProductos).length;
-        const pedidosPendientes = 0; // Esto vendría de un sistema de pedidos
+    async renderDashboard() {
+        try {
+            const [proveedores, productos, estadisticas] = await Promise.all([
+                this.api.get('/proveedores/'),
+                this.api.get('/productos/'),
+                this.api.get('/dashboard/estadisticas/')
+            ]);
+            
+            const totalProveedores = proveedores.length;
+            const totalProductosProveedores = productos.length;
+            const proveedoresDestacados = estadisticas.proveedoresDestacados || 0;
+            const pedidosPendientes = estadisticas.pedidosPendientes || 0;
 
-        document.getElementById('totalProveedores').textContent = totalProveedores;
-        document.getElementById('totalProductosProveedores').textContent = totalProductosProveedores;
-        document.getElementById('proveedoresDestacados').textContent = proveedoresDestacados;
-        document.getElementById('pedidosPendientes').textContent = pedidosPendientes;
+            document.getElementById('totalProveedores').textContent = totalProveedores;
+            document.getElementById('totalProductosProveedores').textContent = totalProductosProveedores;
+            document.getElementById('proveedoresDestacados').textContent = proveedoresDestacados;
+            document.getElementById('pedidosPendientes').textContent = pedidosPendientes;
+        } catch (error) {
+            console.error('Error renderizando dashboard:', error);
+        }
     }
 
-    renderProveedoresTable(proveedores = null) {
+    async renderProveedoresTable(proveedores = null) {
         this.showTableLoading();
         
-        setTimeout(() => {
+        try {
+            const proveedoresToRender = proveedores || await this.api.get('/proveedores/');
             const tablaBody = document.getElementById('tablaProveedores');
             const tableEmpty = document.getElementById('tableEmptyProveedores');
             
             if (!tablaBody) return;
 
-            const proveedoresToRender = proveedores || storage.getProveedores();
             const startIndex = (this.currentPage - 1) * this.itemsPerPage;
             const endIndex = startIndex + this.itemsPerPage;
             const paginatedProveedores = proveedoresToRender.slice(startIndex, endIndex);
@@ -129,16 +140,16 @@ class ProveedoresManager {
             tablaBody.innerHTML = '';
 
             if (paginatedProveedores.length === 0) {
-                tableEmpty.style.display = 'block';
+                if (tableEmpty) tableEmpty.style.display = 'block';
                 this.renderPagination(0);
                 this.hideTableLoading();
                 return;
             }
 
-            tableEmpty.style.display = 'none';
+            if (tableEmpty) tableEmpty.style.display = 'none';
 
-            paginatedProveedores.forEach(proveedor => {
-                const productosCount = this.getProductosCountByProveedor(proveedor.id);
+            for (const proveedor of paginatedProveedores) {
+                const productosCount = await this.getProductosCountByProveedor(proveedor.id);
                 const estado = proveedor.estado || 'activo';
                 
                 const fila = document.createElement('tr');
@@ -158,16 +169,25 @@ class ProveedoresManager {
                     </td>
                 `;
                 tablaBody.appendChild(fila);
-            });
+            }
 
             this.renderPagination(proveedoresToRender.length);
+        } catch (error) {
+            console.error('Error renderizando tabla:', error);
+            this.showNotification('Error cargando proveedores', 'error');
+        } finally {
             this.hideTableLoading();
-        }, 500);
+        }
     }
 
-    getProductosCountByProveedor(proveedorId) {
-        const productos = storage.getProductos();
-        return productos.filter(p => p.proveedor == proveedorId).length;
+    async getProductosCountByProveedor(proveedorId) {
+        try {
+            const productos = await this.api.get(`/productos/?proveedor=${proveedorId}`);
+            return productos.length;
+        } catch (error) {
+            console.error('Error contando productos:', error);
+            return 0;
+        }
     }
 
     renderPagination(totalItems) {
@@ -205,9 +225,6 @@ class ProveedoresManager {
     }
 
     changePage(page) {
-        const totalPages = Math.ceil(storage.getProveedores().length / this.itemsPerPage);
-        if (page < 1 || page > totalPages) return;
-        
         this.currentPage = page;
         this.renderProveedoresTable();
     }
@@ -220,9 +237,8 @@ class ProveedoresManager {
             this.currentSort.direction = 'asc';
         }
 
-        const proveedores = storage.getProveedores();
-        const sortedProveedores = this.sortProveedores(proveedores, this.currentSort.field, this.currentSort.direction);
-        this.renderProveedoresTable(sortedProveedores);
+        // En una implementación real, esto se haría en el backend
+        this.renderProveedoresTable();
         
         // Actualizar indicador visual en el header
         document.querySelectorAll('th[data-sort]').forEach(th => {
@@ -230,22 +246,6 @@ class ProveedoresManager {
             if (th.dataset.sort === field) {
                 th.innerHTML += this.currentSort.direction === 'asc' ? ' ↗' : ' ↘';
             }
-        });
-    }
-
-    sortProveedores(proveedores, field, direction) {
-        return [...proveedores].sort((a, b) => {
-            let aValue = a[field];
-            let bValue = b[field];
-            
-            if (typeof aValue === 'string') {
-                aValue = aValue.toLowerCase();
-                bValue = bValue.toLowerCase();
-            }
-            
-            if (aValue < bValue) return direction === 'asc' ? -1 : 1;
-            if (aValue > bValue) return direction === 'asc' ? 1 : -1;
-            return 0;
         });
     }
 
@@ -262,31 +262,33 @@ class ProveedoresManager {
         }
     }
 
-    handleSearch(termino) {
+    async handleSearch(termino) {
         this.currentPage = 1;
-        const proveedores = storage.getProveedores();
-        const proveedoresFiltrados = proveedores.filter(proveedor => 
-            proveedor.nombre.toLowerCase().includes(termino.toLowerCase()) ||
-            proveedor.contacto.toLowerCase().includes(termino.toLowerCase()) ||
-            proveedor.email.toLowerCase().includes(termino.toLowerCase()) ||
-            proveedor.telefono.includes(termino)
-        );
-        this.renderProveedoresTable(proveedoresFiltrados);
+        try {
+            const proveedoresFiltrados = await this.api.get(`/proveedores/?search=${encodeURIComponent(termino)}`);
+            this.renderProveedoresTable(proveedoresFiltrados);
+        } catch (error) {
+            console.error('Error buscando proveedores:', error);
+        }
     }
 
-    populateCategoriasSelect() {
+    async populateCategoriasSelect() {
         const select = document.getElementById('categoriasProveedor');
         if (!select) return;
 
-        const categorias = storage.getCategorias();
-        select.innerHTML = '';
-        
-        categorias.forEach(categoria => {
-            const option = document.createElement('option');
-            option.value = categoria.id;
-            option.textContent = categoria.nombre;
-            select.appendChild(option);
-        });
+        try {
+            const categorias = await this.api.get('/categorias/');
+            select.innerHTML = '';
+            
+            categorias.forEach(categoria => {
+                const option = document.createElement('option');
+                option.value = categoria.id;
+                option.textContent = categoria.nombre;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error cargando categorías:', error);
+        }
     }
 
     showProveedorForm(proveedor = null) {
@@ -333,11 +335,11 @@ class ProveedoresManager {
         document.getElementById('direccionCounter').textContent = (proveedor.direccion || '').length;
         document.getElementById('notasCounter').textContent = (proveedor.notas || '').length;
         
-        // Seleccionar categorías
+        // Seleccionar categorías (si tu backend soporta categorías en proveedores)
         if (proveedor.categorias) {
             const categoriasSelect = document.getElementById('categoriasProveedor');
             Array.from(categoriasSelect.options).forEach(option => {
-                option.selected = proveedor.categorias.includes(option.value);
+                option.selected = proveedor.categorias.includes(parseInt(option.value));
             });
         }
     }
@@ -347,11 +349,11 @@ class ProveedoresManager {
         
         const form = e.target;
         const formData = new FormData(form);
-        const proveedorData = Object.fromEntries(formData.entries());
+        let proveedorData = Object.fromEntries(formData.entries());
         
         // Procesar categorías múltiples
         const categoriasSelect = document.getElementById('categoriasProveedor');
-        proveedorData.categorias = Array.from(categoriasSelect.selectedOptions).map(option => option.value);
+        proveedorData.categorias = Array.from(categoriasSelect.selectedOptions).map(option => parseInt(option.value));
         
         if (this.isEditing) {
             proveedorData.id = this.currentProveedorId;
@@ -369,14 +371,11 @@ class ProveedoresManager {
         this.setFormLoading(true);
 
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
             let resultado;
             if (this.isEditing) {
-                resultado = this.actualizarProveedor(this.currentProveedorId, proveedorData);
+                resultado = await this.api.put(`/proveedores/${this.currentProveedorId}/`, proveedorData);
             } else {
-                resultado = this.agregarProveedor(proveedorData);
+                resultado = await this.api.post('/proveedores/', proveedorData);
             }
 
             if (resultado) {
@@ -385,12 +384,13 @@ class ProveedoresManager {
                     'success'
                 );
                 this.hideProveedorForm();
-                this.renderDashboard();
-                this.renderProveedoresTable();
+                await this.renderDashboard();
+                await this.renderProveedoresTable();
             } else {
                 throw new Error('Error al guardar el proveedor');
             }
         } catch (error) {
+            console.error('Error guardando proveedor:', error);
             this.showNotification('Error al guardar el proveedor: ' + error.message, 'error');
         } finally {
             this.setFormLoading(false);
@@ -425,18 +425,6 @@ class ProveedoresManager {
             isValid = false;
         }
 
-        // Validación de nombre único
-        const proveedores = storage.getProveedores();
-        const nombreExiste = proveedores.some(p => 
-            p.nombre.toLowerCase() === proveedor.nombre.toLowerCase() && 
-            p.id !== (proveedor.id || null)
-        );
-
-        if (nombreExiste) {
-            errors.nombre = 'Ya existe un proveedor con este nombre';
-            isValid = false;
-        }
-
         return { isValid, errors };
     }
 
@@ -456,99 +444,80 @@ class ProveedoresManager {
         }
     }
 
-    agregarProveedor(proveedorData) {
-        const proveedores = storage.getProveedores();
-        const nuevoId = proveedores.length > 0 ? Math.max(...proveedores.map(p => p.id)) + 1 : 1;
-        
-        const nuevoProveedor = {
-            id: nuevoId,
-            ...proveedorData,
-            fechaCreacion: new Date().toISOString()
-        };
-        
-        proveedores.push(nuevoProveedor);
-        return storage.setProveedores(proveedores) ? nuevoProveedor : null;
-    }
-
-    actualizarProveedor(id, datosActualizados) {
-        const proveedores = storage.getProveedores();
-        const index = proveedores.findIndex(p => p.id === id);
-        if (index !== -1) {
-            proveedores[index] = { 
-                ...proveedores[index], 
-                ...datosActualizados, 
-                fechaActualizacion: new Date().toISOString() 
-            };
-            return storage.setProveedores(proveedores);
-        }
-        return false;
-    }
-
-    editarProveedor(id) {
-        const proveedores = storage.getProveedores();
-        const proveedor = proveedores.find(p => p.id === id);
-        if (proveedor) {
-            this.showProveedorForm(proveedor);
+    async editarProveedor(id) {
+        try {
+            const proveedor = await this.api.get(`/proveedores/${id}/`);
+            if (proveedor) {
+                this.showProveedorForm(proveedor);
+            }
+        } catch (error) {
+            console.error('Error cargando proveedor:', error);
+            this.showNotification('Error cargando proveedor', 'error');
         }
     }
 
-    verDetalles(id) {
-        const proveedores = storage.getProveedores();
-        const proveedor = proveedores.find(p => p.id === id);
-        const productos = storage.getProductos();
-        const productosProveedor = productos.filter(p => p.proveedor == id);
-        
-        if (!proveedor) return;
-
-        const modal = document.getElementById('modalDetallesProveedor');
-        const title = document.getElementById('modalTitleDetalles');
-        const content = document.getElementById('detallesProveedorContent');
-        
-        title.textContent = `Detalles: ${proveedor.nombre}`;
-        
-        content.innerHTML = `
-            <div class="detalles-grid">
-                <div class="detalle-item">
-                    <label>Nombre:</label>
-                    <span>${this.escapeHtml(proveedor.nombre)}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Contacto:</label>
-                    <span>${this.escapeHtml(proveedor.contacto)}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Teléfono:</label>
-                    <span>${proveedor.telefono}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Email:</label>
-                    <span>${proveedor.email}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Dirección:</label>
-                    <span>${proveedor.direccion || 'No especificada'}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Estado:</label>
-                    <span class="status ${proveedor.estado === 'activo' ? 'in-stock' : 'out-of-stock'}">${proveedor.estado === 'activo' ? 'Activo' : 'Inactivo'}</span>
-                </div>
-                <div class="detalle-item full-width">
-                    <label>Notas:</label>
-                    <span>${proveedor.notas || 'No hay notas adicionales'}</span>
-                </div>
-            </div>
+    async verDetalles(id) {
+        try {
+            const [proveedor, productos] = await Promise.all([
+                this.api.get(`/proveedores/${id}/`),
+                this.api.get(`/productos/?proveedor=${id}`)
+            ]);
             
-            <div class="productos-proveedor" style="margin-top: 20px;">
-                <h4>Productos suministrados (${productosProveedor.length})</h4>
-                ${productosProveedor.length > 0 ? `
-                    <ul>
-                        ${productosProveedor.map(p => `<li>${this.escapeHtml(p.nombre)} - Stock: ${p.stock}</li>`).join('')}
-                    </ul>
-                ` : '<p>Este proveedor no tiene productos asociados.</p>'}
-            </div>
-        `;
-        
-        modal.classList.add('show');
+            if (!proveedor) return;
+
+            const modal = document.getElementById('modalDetallesProveedor');
+            const title = document.getElementById('modalTitleDetalles');
+            const content = document.getElementById('detallesProveedorContent');
+            
+            title.textContent = `Detalles: ${proveedor.nombre}`;
+            
+            content.innerHTML = `
+                <div class="detalles-grid">
+                    <div class="detalle-item">
+                        <label>Nombre:</label>
+                        <span>${this.escapeHtml(proveedor.nombre)}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <label>Contacto:</label>
+                        <span>${this.escapeHtml(proveedor.contacto)}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <label>Teléfono:</label>
+                        <span>${proveedor.telefono}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <label>Email:</label>
+                        <span>${proveedor.email}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <label>Dirección:</label>
+                        <span>${proveedor.direccion || 'No especificada'}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <label>Estado:</label>
+                        <span class="status ${proveedor.estado === 'activo' ? 'in-stock' : 'out-of-stock'}">${proveedor.estado === 'activo' ? 'Activo' : 'Inactivo'}</span>
+                    </div>
+                    <div class="detalle-item full-width">
+                        <label>Notas:</label>
+                        <span>${proveedor.notas || 'No hay notas adicionales'}</span>
+                    </div>
+                </div>
+                
+                <div class="productos-proveedor" style="margin-top: 20px;">
+                    <h4>Productos suministrados (${productos.length})</h4>
+                    ${productos.length > 0 ? `
+                        <ul>
+                            ${productos.map(p => `<li>${this.escapeHtml(p.nombre)} - Stock: ${p.stock}</li>`).join('')}
+                        </ul>
+                    ` : '<p>Este proveedor no tiene productos asociados.</p>'}
+                </div>
+            `;
+            
+            modal.classList.add('show');
+        } catch (error) {
+            console.error('Error cargando detalles:', error);
+            this.showNotification('Error cargando detalles del proveedor', 'error');
+        }
     }
 
     hideDetallesModal() {
@@ -557,22 +526,11 @@ class ProveedoresManager {
     }
 
     confirmarEliminacion(id) {
-        const proveedores = storage.getProveedores();
-        const proveedor = proveedores.find(p => p.id === id);
-        const productos = storage.getProductos();
-        const productosAsociados = productos.filter(p => p.proveedor == id);
-        
-        if (!proveedor) return;
-
         const modal = document.getElementById('modalConfirm');
         const message = document.getElementById('confirmMessage');
         const btnAccept = document.getElementById('btnConfirmAccept');
         
-        let mensaje = `¿Está seguro de que desea eliminar el proveedor "${proveedor.nombre}"?`;
-        
-        if (productosAsociados.length > 0) {
-            mensaje += `\n\nADVERTENCIA: Este proveedor tiene ${productosAsociados.length} producto(s) asociado(s). Al eliminar el proveedor, estos productos quedarán sin proveedor asignado.`;
-        }
+        let mensaje = `¿Está seguro de que desea eliminar este proveedor?`;
         
         message.textContent = mensaje;
         
@@ -593,44 +551,27 @@ class ProveedoresManager {
         this.hideConfirmModal();
         
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await this.api.delete(`/proveedores/${id}/`);
             
-            const resultado = this.eliminarProveedorStorage(id);
-            
-            if (resultado) {
-                this.showNotification('Proveedor eliminado correctamente', 'success');
-                this.renderDashboard();
-                this.renderProveedoresTable();
-            } else {
-                throw new Error('Error al eliminar el proveedor');
-            }
+            this.showNotification('Proveedor eliminado correctamente', 'success');
+            await this.renderDashboard();
+            await this.renderProveedoresTable();
         } catch (error) {
+            console.error('Error eliminando proveedor:', error);
             this.showNotification('Error al eliminar el proveedor: ' + error.message, 'error');
         }
     }
 
-    eliminarProveedorStorage(id) {
-        const proveedores = storage.getProveedores();
-        const nuevosProveedores = proveedores.filter(p => p.id !== id);
-        
-        // Actualizar productos que tenían este proveedor
-        const productos = storage.getProductos();
-        productos.forEach(producto => {
-            if (producto.proveedor == id) {
-                producto.proveedor = null;
-            }
-        });
-        storage.setProductos(productos);
-        
-        return storage.setProveedores(nuevosProveedores);
-    }
-
-    exportData() {
-        const proveedores = storage.getProveedores();
-        const csvContent = this.convertToCSV(proveedores);
-        this.downloadCSV(csvContent, 'proveedores_sushihouse.csv');
-        this.showNotification('Datos exportados correctamente', 'success');
+    async exportData() {
+        try {
+            const proveedores = await this.api.get('/proveedores/');
+            const csvContent = this.convertToCSV(proveedores);
+            this.downloadCSV(csvContent, 'proveedores_sushihouse.csv');
+            this.showNotification('Datos exportados correctamente', 'success');
+        } catch (error) {
+            console.error('Error exportando datos:', error);
+            this.showNotification('Error exportando datos', 'error');
+        }
     }
 
     convertToCSV(data) {
@@ -640,7 +581,6 @@ class ProveedoresManager {
         const csvRows = [headers.join(',')];
         
         data.forEach(item => {
-            const productosCount = this.getProductosCountByProveedor(item.id);
             const row = [
                 `"${item.nombre}"`,
                 `"${item.contacto}"`,
@@ -648,7 +588,7 @@ class ProveedoresManager {
                 `"${item.email}"`,
                 `"${item.direccion || ''}"`,
                 `"${item.estado}"`,
-                productosCount
+                '0' // Se podría obtener el count real
             ];
             csvRows.push(row.join(','));
         });

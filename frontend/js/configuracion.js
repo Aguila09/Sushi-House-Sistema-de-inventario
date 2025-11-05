@@ -2,13 +2,13 @@
 class ConfiguracionManager {
     constructor() {
         this.configuracion = {};
+        this.api = apiClient;
         this.init();
     }
 
     init() {
         this.bindEvents();
         this.loadConfiguracion();
-        this.populateCategorias();
     }
 
     bindEvents() {
@@ -27,9 +27,24 @@ class ConfiguracionManager {
         document.getElementById('btnConfirmCancel')?.addEventListener('click', () => this.hideConfirmModal());
     }
 
-    loadConfiguracion() {
-        this.configuracion = storage.getConfiguracion();
-        this.populateForms();
+    async loadConfiguracion() {
+        try {
+            // Cargar configuración desde la API
+            const configFromAPI = await this.api.get('/configuracion/');
+            
+            // Combinar con configuración local
+            this.configuracion = {
+                ...storage.getConfiguracion(),
+                ...configFromAPI
+            };
+            
+            this.populateForms();
+        } catch (error) {
+            console.error('Error cargando configuración:', error);
+            // Usar configuración local como fallback
+            this.configuracion = storage.getConfiguracion();
+            this.populateForms();
+        }
     }
 
     populateForms() {
@@ -46,7 +61,6 @@ class ConfiguracionManager {
         document.getElementById('stockMinimoGlobal').value = this.configuracion.stockMinimoGlobal || 10;
         document.getElementById('alertaStockBajo').value = this.configuracion.alertaStockBajo || 'si';
         document.getElementById('unidadMedida').value = this.configuracion.unidadMedida || 'unidades';
-        document.getElementById('categoriaPredeterminada').value = this.configuracion.categoriaPredeterminada || '';
         document.getElementById('controlCaducidad').checked = this.configuracion.controlCaducidad || false;
         document.getElementById('notificacionesAutomaticas').checked = this.configuracion.notificacionesAutomaticas || false;
 
@@ -69,19 +83,6 @@ class ConfiguracionManager {
         document.getElementById('backupAutomatico').checked = this.configuracion.backupAutomatico || false;
     }
 
-    populateCategorias() {
-        const select = document.getElementById('categoriaPredeterminada');
-        if (!select) return;
-
-        const categorias = storage.getCategorias();
-        categorias.forEach(categoria => {
-            const option = document.createElement('option');
-            option.value = categoria.id;
-            option.textContent = categoria.nombre;
-            select.appendChild(option);
-        });
-    }
-
     async handleGeneralSubmit(e) {
         e.preventDefault();
         
@@ -89,31 +90,21 @@ class ConfiguracionManager {
         const formData = new FormData(form);
         const configData = Object.fromEntries(formData.entries());
         
-        // Validar
         if (!this.validateGeneralConfig(configData)) {
             return;
         }
 
-        // Mostrar loading
         this.setFormLoading('btnLoadingGeneral', true);
 
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 800));
+            // Guardar en API
+            await this.api.post('/configuracion/', configData);
             
-            // Actualizar configuración
-            this.configuracion = {
-                ...this.configuracion,
-                ...configData
-            };
+            // Actualizar configuración local
+            this.configuracion = { ...this.configuracion, ...configData };
+            storage.setConfiguracion(this.configuracion);
             
-            const resultado = storage.setConfiguracion(this.configuracion);
-            
-            if (resultado) {
-                this.showNotification('Configuración general guardada correctamente', 'success');
-            } else {
-                throw new Error('Error al guardar la configuración');
-            }
+            this.showNotification('Configuración general guardada correctamente', 'success');
         } catch (error) {
             this.showNotification('Error al guardar la configuración: ' + error.message, 'error');
         } finally {
@@ -128,30 +119,16 @@ class ConfiguracionManager {
         const formData = new FormData(form);
         const configData = Object.fromEntries(formData.entries());
         
-        // Convertir checkboxes
         configData.controlCaducidad = document.getElementById('controlCaducidad').checked;
         configData.notificacionesAutomaticas = document.getElementById('notificacionesAutomaticas').checked;
 
-        // Mostrar loading
         this.setFormLoading('btnLoadingInventario', true);
 
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
-            // Actualizar configuración
-            this.configuracion = {
-                ...this.configuracion,
-                ...configData
-            };
-            
-            const resultado = storage.setConfiguracion(this.configuracion);
-            
-            if (resultado) {
-                this.showNotification('Configuración de inventario guardada correctamente', 'success');
-            } else {
-                throw new Error('Error al guardar la configuración');
-            }
+            await this.api.post('/configuracion/', configData);
+            this.configuracion = { ...this.configuracion, ...configData };
+            storage.setConfiguracion(this.configuracion);
+            this.showNotification('Configuración de inventario guardada correctamente', 'success');
         } catch (error) {
             this.showNotification('Error al guardar la configuración: ' + error.message, 'error');
         } finally {
@@ -166,7 +143,6 @@ class ConfiguracionManager {
         const formData = new FormData(form);
         const configData = Object.fromEntries(formData.entries());
         
-        // Convertir checkboxes
         configData.notifStockBajo = document.getElementById('notifStockBajo').checked;
         configData.notifStockAgotado = document.getElementById('notifStockAgotado').checked;
         configData.notifProductosCaducados = document.getElementById('notifProductosCaducados').checked;
@@ -174,32 +150,18 @@ class ConfiguracionManager {
         configData.notifReportesAutomaticos = document.getElementById('notifReportesAutomaticos').checked;
         configData.notifActividadUsuarios = document.getElementById('notifActividadUsuarios').checked;
 
-        // Validar email si está presente
         if (configData.emailNotificaciones && !this.validateEmail(configData.emailNotificaciones)) {
             this.showNotification('Por favor ingrese un email válido', 'error');
             return;
         }
 
-        // Mostrar loading
         this.setFormLoading('btnLoadingNotificaciones', true);
 
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
-            // Actualizar configuración
-            this.configuracion = {
-                ...this.configuracion,
-                ...configData
-            };
-            
-            const resultado = storage.setConfiguracion(this.configuracion);
-            
-            if (resultado) {
-                this.showNotification('Configuración de notificaciones guardada correctamente', 'success');
-            } else {
-                throw new Error('Error al guardar la configuración');
-            }
+            await this.api.post('/configuracion/', configData);
+            this.configuracion = { ...this.configuracion, ...configData };
+            storage.setConfiguracion(this.configuracion);
+            this.showNotification('Configuración de notificaciones guardada correctamente', 'success');
         } catch (error) {
             this.showNotification('Error al guardar la configuración: ' + error.message, 'error');
         } finally {
@@ -214,31 +176,17 @@ class ConfiguracionManager {
         const formData = new FormData(form);
         const configData = Object.fromEntries(formData.entries());
         
-        // Convertir checkboxes
         configData.requerirConfirmacion = document.getElementById('requerirConfirmacion').checked;
         configData.registroActividad = document.getElementById('registroActividad').checked;
         configData.backupAutomatico = document.getElementById('backupAutomatico').checked;
 
-        // Mostrar loading
         this.setFormLoading('btnLoadingSeguridad', true);
 
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
-            // Actualizar configuración
-            this.configuracion = {
-                ...this.configuracion,
-                ...configData
-            };
-            
-            const resultado = storage.setConfiguracion(this.configuracion);
-            
-            if (resultado) {
-                this.showNotification('Configuración de seguridad guardada correctamente', 'success');
-            } else {
-                throw new Error('Error al guardar la configuración');
-            }
+            await this.api.post('/configuracion/', configData);
+            this.configuracion = { ...this.configuracion, ...configData };
+            storage.setConfiguracion(this.configuracion);
+            this.showNotification('Configuración de seguridad guardada correctamente', 'success');
         } catch (error) {
             this.showNotification('Error al guardar la configuración: ' + error.message, 'error');
         } finally {
@@ -275,19 +223,11 @@ class ConfiguracionManager {
         }
     }
 
-    generarBackup() {
+    async generarBackup() {
         try {
-            const datos = {
-                productos: storage.getProductos(),
-                categorias: storage.getCategorias(),
-                proveedores: storage.getProveedores(),
-                usuarios: storage.getUsuarios(),
-                configuracion: storage.getConfiguracion(),
-                fechaBackup: new Date().toISOString(),
-                version: '1.0'
-            };
-
-            const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+            const backupData = await this.api.get('/backup/');
+            
+            const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             
@@ -304,7 +244,7 @@ class ConfiguracionManager {
         }
     }
 
-    restaurarSistema() {
+    async restaurarSistema() {
         const fileInput = document.getElementById('fileRestore');
         const file = fileInput.files[0];
         
@@ -314,29 +254,22 @@ class ConfiguracionManager {
         }
 
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
                 const datos = JSON.parse(e.target.result);
                 
-                // Validar estructura del backup
-                if (!datos.productos || !datos.categorias || !datos.proveedores || !datos.usuarios || !datos.configuracion) {
-                    throw new Error('El archivo no tiene el formato correcto');
-                }
-
                 this.showConfirmModal(
                     '¿Está seguro de que desea restaurar el sistema desde este backup? Todos los datos actuales serán reemplazados.',
-                    () => {
-                        // Restaurar datos
-                        storage.setProductos(datos.productos);
-                        storage.setCategorias(datos.categorias);
-                        storage.setProveedores(datos.proveedores);
-                        storage.setUsuarios(datos.usuarios);
-                        storage.setConfiguracion(datos.configuracion);
-                        
-                        this.showNotification('Sistema restaurado correctamente desde el backup', 'success');
-                        setTimeout(() => {
-                            location.reload();
-                        }, 2000);
+                    async () => {
+                        try {
+                            await this.api.post('/restore/', datos);
+                            this.showNotification('Sistema restaurado correctamente desde el backup', 'success');
+                            setTimeout(() => {
+                                location.reload();
+                            }, 2000);
+                        } catch (error) {
+                            this.showNotification('Error al restaurar el sistema: ' + error.message, 'error');
+                        }
                     }
                 );
             } catch (error) {
@@ -355,8 +288,9 @@ class ConfiguracionManager {
         );
     }
 
-    resetSystem() {
+    async resetSystem() {
         try {
+            await this.api.post('/system/reset/');
             storage.clear();
             storage.initializeStorage();
             
@@ -376,7 +310,6 @@ class ConfiguracionManager {
         
         messageElement.textContent = message;
         
-        // Remover event listeners previos
         const newBtnAccept = btnAccept.cloneNode(true);
         btnAccept.parentNode.replaceChild(newBtnAccept, btnAccept);
         
@@ -403,7 +336,6 @@ class ConfiguracionManager {
         
         container.appendChild(notification);
         
-        // Auto-remover después de 5 segundos
         setTimeout(() => {
             if (notification.parentElement) {
                 notification.remove();
@@ -422,7 +354,6 @@ class ConfiguracionManager {
     }
 }
 
-// Inicializar el manager de configuración
 let configManager;
 document.addEventListener('DOMContentLoaded', () => {
     configManager = new ConfiguracionManager();

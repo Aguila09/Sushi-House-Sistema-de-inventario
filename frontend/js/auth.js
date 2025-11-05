@@ -2,7 +2,21 @@
 class AuthSystem {
     constructor() {
         this.currentUser = null;
+        this.api = apiClient;
         this.init();
+        
+        // Escuchar eventos de refresh de token
+        window.addEventListener('tokenRefreshed', async (event) => {
+            try {
+                // Actualizar información del usuario cuando el token se refresca
+                const userResponse = await this.api.get('/usuarios/me/');
+                this.currentUser = userResponse;
+                localStorage.setItem('currentUser', JSON.stringify(userResponse));
+                this.updateUI();
+            } catch (error) {
+                console.error('Error actualizando usuario después de refresh:', error);
+            }
+        });
     }
 
     init() {
@@ -11,22 +25,22 @@ class AuthSystem {
     }
 
     checkAuthentication() {
-        const currentUser = storage.get('currentUser');
-        const token = storage.get('authToken');
+        const currentUser = localStorage.getItem('currentUser');
+        const token = localStorage.getItem('authToken');
 
         if (currentUser && token) {
-            this.currentUser = currentUser;
+            this.currentUser = JSON.parse(currentUser);
             this.updateUI();
             return;
         }
 
         // Si ya estamos en la página de login, no redirigir
-        const pathname = window.location.pathname;
-        const isLoginPage = pathname.endsWith('/frontend/login.html') || pathname.endsWith('login.html');
+        const pathname = window.location.pathname || '';
+        const isLoginPage = pathname.includes('login.html');
         if (isLoginPage) return;
 
-        // Redirigir a login.html en frontend
-        window.location.href = 'login.html';
+        // Redirigir a login sin añadir entrada al historial
+        window.location.replace('login.html');
     }
 
     bindAuthEvents() {
@@ -47,20 +61,64 @@ class AuthSystem {
         this.setLoginLoading(true);
 
         try {
-            // Simular autenticación
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log('Iniciando proceso de login...');
+            let usernameToUse = credentials.email;
             
-            const users = storage.getUsuarios();
-            const user = users.find(u => 
-                u.email === credentials.email && 
-                u.estado === 'activo'
-            );
+            if (usernameToUse && usernameToUse.includes('@')) {
+                console.log('Email detectado, resolviendo usuario...');
+                try {
+                    const resolveResponse = await fetch('http://localhost:8000/api/auth/resolve-user/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: usernameToUse })
+                    });
+                    
+                    if (resolveResponse.ok) {
+                        const userData = await resolveResponse.json();
+                        if (userData.usuario) {
+                            usernameToUse = userData.usuario;
+                            console.log('Usuario resuelto:', usernameToUse);
+                        }
+                    } else if (resolveResponse.status === 404) {
+                        throw new Error('No existe ningún usuario con ese email');
+                    }
+                } catch (e) {
+                    throw new Error(e.message || 'Usuario o contraseña incorrectos');
+                }
+            }
 
-            if (user) {
-                // En un sistema real, aquí verificaríamos la contraseña
-                this.login(user);
+            console.log('Solicitando token...');
+            const tokenPayload = {
+                usuario: usernameToUse,
+                password: credentials.password
+            };
+            
+            const response = await this.api.post('/token/', tokenPayload);
+
+            if (response && response.access) {
+                console.log('Token recibido, actualizando cliente API...');
+                // Actualizar el token en el cliente API
+                this.api.token = response.access;
+                localStorage.setItem('authToken', response.access);
+                localStorage.setItem('refreshToken', response.refresh);
+                
+                console.log('Obteniendo información del usuario...');
+                // Obtener información del usuario actual con el nuevo token
+                const userResponse = await this.api.get('/usuarios/me/');
+                console.log('Información de usuario recibida:', userResponse);
+                
+                this.currentUser = userResponse;
+                localStorage.setItem('currentUser', JSON.stringify(userResponse));
+                
+                const displayName = userResponse.nombre || userResponse.usuario || userResponse.email || 'Usuario';
+                this.showNotification(`Bienvenido, ${displayName}`, 'success');
+                
+                console.log('Redirigiendo al dashboard...');
+                setTimeout(() => {
+                    window.location.replace('index.html');
+                }, 1000);
             } else {
-                throw new Error('Credenciales inválidas o usuario inactivo');
+                throw new Error('Credenciales inválidas');
             }
         } catch (error) {
             this.showNotification('Error de autenticación: ' + error.message, 'error');
@@ -69,42 +127,18 @@ class AuthSystem {
         }
     }
 
-    login(user) {
-        this.currentUser = user;
-        
-        // Guardar sesión
-        storage.set('currentUser', user);
-        storage.set('authToken', this.generateToken());
-        storage.set('lastLogin', new Date().toISOString());
-        
-        // Actualizar último acceso del usuario
-        const users = storage.getUsuarios();
-        const userIndex = users.findIndex(u => u.id === user.id);
-        if (userIndex !== -1) {
-            users[userIndex].ultimoAcceso = new Date().toISOString();
-            storage.setUsuarios(users);
-        }
-        
-        this.showNotification(`Bienvenido, ${user.nombre}`, 'success');
-        
-        // Redirigir al dashboard (index.html en frontend)
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 1000);
-    }
-
     logout() {
         this.showConfirmModal(
             '¿Está seguro de que desea cerrar sesión?',
             () => {
-                storage.remove('currentUser');
-                storage.remove('authToken');
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('refreshToken');
                 this.currentUser = null;
                 this.showNotification('Sesión cerrada correctamente', 'info');
                 
                 setTimeout(() => {
-                    // Redirigir a login.html en frontend
-                    window.location.href = 'login.html';
+                    window.location.replace('login.html');
                 }, 1000);
             }
         );
@@ -124,21 +158,16 @@ class AuthSystem {
     }
 
     updateUI() {
-        // Nombre a mostrar (orden de preferencia)
-        const name = this.currentUser?.nombre || this.currentUser?.usuario || this.currentUser?.email || 'Usuario';
-
-        // Actualizar todos los elementos que podrían mostrar el nombre
+        const name = this.currentUser?.first_name || this.currentUser?.username || 'Usuario';
         document.querySelectorAll('#userName, .username, .user-info span').forEach(el => {
             el.textContent = name;
         });
 
-        // Actualizar avatar (iniciales) si existe elemento .user-info .avatar o .avatar
         const initials = this.getInitials(name);
         document.querySelectorAll('.user-info .avatar, .avatar, .avatar-small').forEach(av => {
             av.textContent = initials;
         });
         
-        // Mostrar/ocultar elementos según permisos
         this.updatePermissions();
     }
 
@@ -150,24 +179,17 @@ class AuthSystem {
     updatePermissions() {
         if (!this.currentUser) return;
         
-        // Ejemplo: ocultar funcionalidades para usuarios no admin
-        if (this.currentUser.rol !== 'admin') {
+        if (!this.currentUser.is_staff) {
             document.querySelectorAll('[data-role="admin"]').forEach(el => {
                 el.style.display = 'none';
             });
         }
     }
 
-    generateToken() {
-        return 'token_' + Math.random().toString(36).substr(2) + Date.now().toString(36);
-    }
-
     showNotification(message, type = 'info') {
-        // Reutilizar el sistema de notificaciones principal si está disponible
         if (window.app && typeof window.app.showNotification === 'function') {
             window.app.showNotification(message, type);
         } else {
-            // Sistema básico de notificaciones para login
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
             notification.style.cssText = `
@@ -195,7 +217,6 @@ class AuthSystem {
     }
 
     showConfirmModal(message, onConfirm) {
-        // Reutilizar el modal de confirmación principal si está disponible
         const modal = document.getElementById('modalConfirm');
         const messageElement = document.getElementById('confirmMessage');
         const btnAccept = document.getElementById('btnConfirmAccept');
@@ -203,7 +224,6 @@ class AuthSystem {
         if (messageElement) messageElement.textContent = message;
 
         if (modal && btnAccept) {
-            // clonar para limpiar handlers previos
             const newBtn = btnAccept.cloneNode(true);
             btnAccept.parentNode.replaceChild(newBtn, btnAccept);
             newBtn.addEventListener('click', () => {
@@ -214,11 +234,9 @@ class AuthSystem {
             return;
         }
 
-        // Fallback simple
         if (confirm(message)) onConfirm();
     }
 
-    // Métodos de verificación de permisos
     hasPermission(permission) {
         if (!this.currentUser) return false;
         
@@ -240,8 +258,19 @@ class AuthSystem {
     }
 }
 
-// Inicializar sistema de autenticación
+// Exponer la clase para que index.html la detecte si hace la comprobación
+window.AuthSystem = AuthSystem;
+
 let auth;
-document.addEventListener('DOMContentLoaded', () => {
+// Instanciar inmediatamente para que esté disponible para otros módulos que lo necesiten.
+// (Los event listeners dentro de AuthSystem usan optional chaining, así que si los elementos del DOM
+// no existen aún, no fallarán.)
+try {
     auth = new AuthSystem();
-});
+    window.auth = auth;
+    console.log('auth.js: AuthSystem instanciado y expuesto en window.auth');
+    // Avisar a cualquier otro script que esté escuchando que auth ya está listo
+    window.dispatchEvent(new Event('authReady'));
+} catch (e) {
+    console.error('auth.js: error instanciando AuthSystem:', e);
+}

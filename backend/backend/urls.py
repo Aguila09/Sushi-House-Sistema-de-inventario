@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from inventario import views
+from inventario.auth import ResolveUserView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 router = routers.DefaultRouter()
@@ -25,11 +26,16 @@ router.register(r'categorias', views.CategoriaViewSet, basename='categorias')
 router.register(r'proveedores', views.ProveedorViewSet, basename='proveedores')
 router.register(r'productos', views.ProductoViewSet, basename='productos')
 router.register(r'usuarios', views.UsuarioViewSet, basename='usuarios')
-router.register(r'configuracion', views.ConfiguracionViewSet, basename='configuracion')
+router.register(r'configuracion', views.ConfiguracionSistemaViewSet, basename='configuracion')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
-    path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # CORREGIDO: Cambiado a /api/token/ para que coincida con el frontend
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # NUEVOS ENDPOINTS REQUERIDOS POR EL FRONTEND
+    path('api/usuarios/me/', views.UsuarioActualView.as_view(), name='usuario_actual'),
+    path('api/auth/resolve-user/', ResolveUserView.as_view(), name='resolve_user'),
+    path('api/dashboard/estadisticas/', views.DashboardEstadisticasView.as_view(), name='dashboard_estadisticas'),
 ]
