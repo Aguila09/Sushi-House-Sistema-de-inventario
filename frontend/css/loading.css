@@ -1,8 +1,7 @@
 /* LOADING SCREEN */
 .loading-screen {
     position: fixed;
-    top: 0;
-    left: 0;
+    inset: 0; /* atajo moderno para top:0; right:0; bottom:0; left:0 */
     width: 100%;
     height: 100%;
     background: linear-gradient(135deg, #2c3e50, #3498db);
@@ -12,6 +11,9 @@
     align-items: center;
     z-index: 9999;
     color: white;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
 }
 
 .loading-spinner {
@@ -30,17 +32,19 @@
     letter-spacing: 1px;
 }
 
-/* Fade out animation */
-.loading-screen.fade-out {
-    animation: fadeOut 0.5s ease-out forwards;
+/* Animación de rotación del spinner */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
 }
 
-@keyframes fadeOut {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-        visibility: hidden;
-    }
+/* Fade-out: usa transición + control JS */
+.loading-screen.fade-out {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Accesibilidad opcional */
+.loading-screen[aria-hidden="true"] {
+    pointer-events: none;
 }

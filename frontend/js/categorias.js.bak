@@ -36,14 +36,14 @@ class CategoriasManager {
     }
 
     async loadInitialData() {
-        Loading.show();
+        this.showLoading();
         try {
             await this.renderDashboard();
             await this.renderCategoriasTable();
-            Loading.hide();
+            this.hideLoading();
         } catch (error) {
             console.error('Error loading initial data:', error);
-            Loading.hide();
+            this.hideLoading();
         }
     }
 

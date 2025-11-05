@@ -37,7 +37,7 @@ class UsuariosManager {
     }
 
     async loadInitialData() {
-        Loading.show();
+        this.showLoading();
         
         try {
             // usar allSettled para evitar que una promesa lenta bloquee todo
@@ -53,7 +53,7 @@ class UsuariosManager {
         } catch (error) {
             console.error('Error loading initial data:', error);
         } finally {
-            Loading.hide();
+            this.hideLoading();
         }
     }
 

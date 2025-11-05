@@ -64,7 +64,7 @@ class SushiHouseApp {
     }
 
     async loadInitialData() {
-        Loading.show();
+        this.showLoading();
         console.log('Cargando datos iniciales...');
         
         try {
@@ -83,11 +83,11 @@ class SushiHouseApp {
             // Verificar que los event listeners estén correctamente asignados
             this.verifyEventListeners();
             
-            Loading.hide();
+            this.hideLoading();
         } catch (error) {
             console.error('Error loading initial data:', error);
             this.showNotification('Error al cargar los datos: ' + error.message, 'error');
-            Loading.hide();
+            this.hideLoading();
         }
     }
     
@@ -541,7 +541,7 @@ class SushiHouseApp {
         }
 
         console.log('Editando producto:', id);
-        Loading.show();
+        this.showLoading();
         
         try {
             const producto = await this.api.get(`/productos/${id}/`);
@@ -556,7 +556,7 @@ class SushiHouseApp {
             console.error('Error al editar producto:', error);
             this.showNotification('Error al cargar el producto: ' + error.message, 'error');
         } finally {
-            Loading.hide();
+            this.hideLoading();
         }
     }
 
@@ -585,7 +585,7 @@ class SushiHouseApp {
         }
 
         this.hideConfirmModal();
-        Loading.show();
+        this.showLoading();
         
         try {
             await this.api.delete(`/productos/${id}/`);
@@ -596,7 +596,7 @@ class SushiHouseApp {
             console.error('Error al eliminar producto:', error);
             this.showNotification('Error al eliminar el producto: ' + (error.message || 'Error desconocido'), 'error');
         } finally {
-            Loading.hide();
+            this.hideLoading();
         }
     }
 

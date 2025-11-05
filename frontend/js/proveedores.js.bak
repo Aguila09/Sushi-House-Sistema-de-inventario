@@ -46,7 +46,7 @@ class ProveedoresManager {
     }
 
     async loadInitialData() {
-        Loading.show();
+        this.showLoading();
         
         try {
             // usar allSettled para evitar que una promesa lenta bloquee todo
@@ -65,7 +65,7 @@ class ProveedoresManager {
             this.showNotification('Error cargando datos del servidor', 'error');
         } finally {
             // Garantizamos siempre ocultar el loading global
-            Loading.hide();
+            this.hideLoading();
         }
     }
 
