@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Productos - Sushi House</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/loading.css">
 </head>
 <body>
     <!-- HEADER -->
@@ -23,6 +24,7 @@
                         <li><a href="proveedores.html">Proveedores</a></li>
                         <li><a href="usuarios.html">Usuarios</a></li>
                         <li><a href="reportes.html">Reportes</a></li>
+                        <li><a href="configuracion.html">Configuración</a></li>
                     </ul>
                 </nav>
                 <div class="user-menu">
@@ -39,7 +41,7 @@
     <main class="container">
         <div class="page-title">
             <h2>Gestión de Productos</h2>
-            <button class="btn btn-primary">
+            <button class="btn btn-primary" id="btnNuevoProducto">
                 <span>+</span> Nuevo Producto
             </button>
         </div>
@@ -47,84 +49,123 @@
         <!-- TABLA DE PRODUCTOS -->
         <section>
             <div class="table-container">
-                <table>
+                <div class="table-loading" id="tableLoading">
+                    <div class="spinner"></div>
+                    <p>Cargando productos...</p>
+                </div>
+                <table id="tablaProductosTable">
                     <thead>
                         <tr>
-                            <th>Producto</th>
-                            <th>Categoría</th>
-                            <th>Precio</th>
-                            <th>Stock</th>
+                            <th data-sort="nombre">Producto</th>
+                            <th data-sort="categoria">Categoría</th>
+                            <th data-sort="precio">Precio</th>
+                            <th data-sort="stock">Stock</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td>Filete de Res</td>
-                            <td>Carnes</td>
-                            <td>$25.50</td>
-                            <td>45</td>
-                            <td><span class="status in-stock">En Stock</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Salmón Fresco</td>
-                            <td>Pescados</td>
-                            <td>$32.75</td>
-                            <td>22</td>
-                            <td><span class="status in-stock">En Stock</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Lechuga Romana</td>
-                            <td>Verduras</td>
-                            <td>$3.20</td>
-                            <td>80</td>
-                            <td><span class="status in-stock">En Stock</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Vino Tinto Reserva</td>
-                            <td>Bebidas</td>
-                            <td>$42.00</td>
-                            <td>3</td>
-                            <td><span class="status low-stock">Stock Bajo</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Atún en Lata</td>
-                            <td>Pescados</td>
-                            <td>$8.50</td>
-                            <td>0</td>
-                            <td><span class="status out-of-stock">Agotado</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
+                    <tbody id="tablaProductos">
+                        <!-- Filas inyectadas por JS -->
                     </tbody>
                 </table>
+                <div class="table-empty" id="tableEmpty" style="display: none;">
+                    <p>No se encontraron productos</p>
+                </div>
+            </div>
+            <div class="pagination" id="pagination">
+                <!-- Paginación generada dinámicamente -->
             </div>
         </section>
     </main>
 
+    <!-- MODAL FORMULARIO PRODUCTO (para que la página sea funcional) -->
+    <div id="modalProducto" class="modal" role="dialog" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Nuevo Producto</h3>
+                <button class="btn-close" id="btnCloseModal" aria-label="Cerrar">&times;</button>
+            </div>
+            <form id="productForm" class="modal-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="nombre">Nombre del Producto *</label>
+                        <input type="text" id="nombre" name="nombre" required maxlength="100">
+                        <span class="error-message" id="errorNombre"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="categoria">Categoría *</label>
+                        <select id="categoria" name="categoria" required>
+                            <option value="">Seleccione una categoría</option>
+                        </select>
+                        <span class="error-message" id="errorCategoria"></span>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="precio">Precio Unitario ($) *</label>
+                        <input type="number" id="precio" name="precio" min="0" step="0.01" required>
+                        <span class="error-message" id="errorPrecio"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="stock">Stock Actual *</label>
+                        <input type="number" id="stock" name="stock" min="0" required>
+                        <span class="error-message" id="errorStock"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="stockMinimo">Stock Mínimo *</label>
+                        <input type="number" id="stockMinimo" name="stockMinimo" min="0" required>
+                        <span class="error-message" id="errorStockMinimo"></span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="proveedor">Proveedor</label>
+                    <select id="proveedor" name="proveedor">
+                        <option value="">Seleccione un proveedor</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="descripcion">Descripción</label>
+                    <textarea id="descripcion" name="descripcion" rows="3" maxlength="500"></textarea>
+                    <div class="char-counter"><span id="descripcionCounter">0</span>/500</div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn" id="btnCancelar">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmit">
+                        <span class="btn-loading" id="btnLoading" style="display: none;"></span>
+                        <span id="btnText">Guardar Producto</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMACIÓN -->
+    <div id="modalConfirm" class="modal" role="dialog" aria-hidden="true">
+        <div class="modal-content confirm-modal">
+            <div class="modal-header">
+                <h3>Confirmar acción</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">¿Está seguro de que desea realizar esta acción?</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" id="btnConfirmCancel">Cancelar</button>
+                <button class="btn btn-danger" id="btnConfirmAccept">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- scripts -->
     <script src="js/storage.js"></script>
+    <script src="js/loading.js"></script>
     <script src="js/api.js"></script>
     <script src="js/validation.js"></script>
     <script src="js/auth.js"></script>
+
     <script src="js/script.js"></script>
     <script src="js/app.js"></script>
 </body>

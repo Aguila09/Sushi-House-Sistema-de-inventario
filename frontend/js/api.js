@@ -28,17 +28,18 @@ class ApiClient {
     async request(endpoint, options = {}) {
         console.log(`API Request: ${options.method || 'GET'} ${endpoint}`);
         const url = `${this.baseURL}${endpoint}`;
+        // Ensure headers object exists and merge default Content-Type for JSON requests.
         const config = {
             headers: {
                 'Content-Type': 'application/json',
-                ...options.headers
+                ...(options.headers || {})
             },
             ...options
         };
 
         // Obtener el token más reciente
         this.token = localStorage.getItem('authToken');
-        
+
         if (this.token) {
             config.headers['Authorization'] = `Bearer ${this.token}`;
             console.log('Token incluido en la solicitud');
@@ -49,16 +50,13 @@ class ApiClient {
         try {
             // Usar fetch con timeout para evitar pendientes infinitos
             const response = await this._fetchWithTimeout(url, config, 12000);
-            
+
+            // Manejo de 401 (intento refresh token)
             if (response.status === 401) {
-                // Token expirado o no autorizado
-                // Intentar usar refresh token antes de redirigir
                 const refreshToken = localStorage.getItem('refreshToken');
                 const now = Date.now();
 
-                // Throttle: si ya manejamos recientemente, evitamos reintentos frecuentes
-                if (now - this._lastUnauthorizedAt < 2000) return;
-
+                if (now - this._lastUnauthorizedAt < 2000) return; // throttle
                 if (refreshToken && !this._isRefreshing) {
                     this._isRefreshing = true;
                     try {
@@ -69,19 +67,12 @@ class ApiClient {
                         }, 12000);
 
                         if (refreshResp.ok) {
-                            console.log('Token refrescado exitosamente');
-                            const data = await refreshResp.json();
-                            if (data.access) {
+                            const data = await refreshResp.json().catch(() => null);
+                            if (data && data.access) {
                                 localStorage.setItem('authToken', data.access);
                                 this.token = data.access;
-                                
-                                // Actualizar el token en el estado global
-                                window.dispatchEvent(new CustomEvent('tokenRefreshed', { 
-                                    detail: { token: data.access }
-                                }));
-                                
-                                console.log('Reintentando petición original con nuevo token');
-                                // Reintentar la petición original con el nuevo token
+                                window.dispatchEvent(new CustomEvent('tokenRefreshed', { detail: { token: data.access } }));
+                                // Reintentar la petición original con nuevo token
                                 config.headers['Authorization'] = `Bearer ${this.token}`;
                                 const retry = await this._fetchWithTimeout(url, config, 12000);
                                 if (retry.status === 401) {
@@ -90,12 +81,21 @@ class ApiClient {
                                     this.handleUnauthorized();
                                     return;
                                 }
-                                if (!retry.ok) throw new Error(`HTTP error! status: ${retry.status}`);
-                                this._isRefreshing = false;
-                                return await retry.json();
+                                if (!retry.ok) {
+                                    let txt = await retry.text().catch(()=>null);
+                                    throw new Error(`HTTP error! status: ${retry.status}${txt ? ' - ' + txt : ''}`);
+                                }
+                                // Procesar respuesta retry
+                                const contentTypeRetry = retry.headers.get('content-type') || '';
+                                if (contentTypeRetry.includes('application/json')) {
+                                    const json = await retry.json().catch(()=>null);
+                                    return this._unwrapPaginated(json);
+                                } else {
+                                    return await retry.text();
+                                }
                             }
                         }
-                        // Si refresh falla, limpiar y redirigir
+                        // si refresh falla
                         this._lastUnauthorizedAt = Date.now();
                         this._isRefreshing = false;
                         this.handleUnauthorized();
@@ -108,14 +108,14 @@ class ApiClient {
                     }
                 }
 
-                // Si no hay refresh token o ya se está refrescando, manejar como no autorizado
+                // si no hay refreshToken o ya se está refrescando
                 this._lastUnauthorizedAt = Date.now();
                 this.handleUnauthorized();
                 return;
             }
 
             if (!response.ok) {
-                // Intentar leer cuerpo de respuesta para dar mensajes de error más útiles
+                // Intentar leer cuerpo de respuesta para mensajes de error más útiles
                 let errorBody = '';
                 try {
                     errorBody = await response.text();
@@ -126,16 +126,46 @@ class ApiClient {
                 throw new Error(message);
             }
 
-            // Intentar parsear JSON, pero si no es JSON devolver el texto
+            // Manejo de respuestas sin body (204) y parsing seguro de JSON
             const contentType = response.headers.get('content-type') || '';
-            if (contentType.includes('application/json')) {
-                return await response.json();
+            if (!contentType) {
+                // No content-type header -> intentar text
+                const txt = await response.text().catch(()=>null);
+                return txt;
             }
+
+            if (contentType.includes('application/json')) {
+                const data = await response.json().catch(()=>null);
+                return this._unwrapPaginated(data);
+            }
+
+            // Fallback: devolver texto
             return await response.text();
         } catch (error) {
             console.error('API request failed:', error);
             throw error;
         }
+    }
+
+    // Si DRF devuelve {count, next, previous, results}, devolver results[] (compatibilidad)
+    // Pero mantener metadatos en results._pagination para quien necesite paginación.
+    _unwrapPaginated(data) {
+        if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'results')) {
+            const results = Array.isArray(data.results) ? data.results : [];
+            // anexar metadatos sin romper la interfaz de array
+            Object.defineProperty(results, '_pagination', {
+                value: {
+                    count: data.count,
+                    next: data.next,
+                    previous: data.previous
+                },
+                enumerable: false,
+                configurable: true,
+                writable: true
+            });
+            return results;
+        }
+        return data;
     }
 
     handleUnauthorized() {
@@ -146,11 +176,9 @@ class ApiClient {
             const pathname = window.location.pathname || '';
             const isLoginPage = pathname.includes('login.html');
             if (!isLoginPage) {
-                // Use replace so it doesn't create extra history entries when redirecting repeatedly
                 window.location.replace('login.html');
             }
         } catch (e) {
-            // en entornos no-browser, ignorar
             console.error('Redirect to login failed:', e);
         }
     }

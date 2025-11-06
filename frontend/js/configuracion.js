@@ -358,3 +358,4 @@ let configManager;
 document.addEventListener('DOMContentLoaded', () => {
     configManager = new ConfiguracionManager();
 });
+

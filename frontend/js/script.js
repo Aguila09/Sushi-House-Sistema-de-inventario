@@ -17,7 +17,7 @@ class SushiHouseApp {
         this.categorias = [];
         this.proveedores = [];
         this.init();
-        
+
         // Escuchar eventos de refresh de token
         window.addEventListener('tokenRefreshed', () => {
             this.loadInitialData();
@@ -33,7 +33,7 @@ class SushiHouseApp {
     bindEvents() {
         // Asignar this a una variable para usar en los event listeners
         const self = this;
-        
+
         const elements = {
             btnNuevoProducto: document.getElementById('btnNuevoProducto'),
             btnCancelar: document.getElementById('btnCancelar'),
@@ -50,61 +50,85 @@ class SushiHouseApp {
         elements.btnExport?.addEventListener('click', () => self.exportData());
         elements.productForm?.addEventListener('submit', (e) => self.handleFormSubmit(e));
         elements.btnConfirmCancel?.addEventListener('click', () => self.hideConfirmModal());
-        
+
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) {
+            // cerrar modals al hacer click en el fondo (delegación)
+            if (e.target && e.target.classList && e.target.classList.contains('modal')) {
                 this.hideProductForm();
                 this.hideConfirmModal();
             }
         });
 
+        // Sort headers (si existen)
         document.querySelectorAll('th[data-sort]').forEach(th => {
             th.addEventListener('click', () => this.handleSort(th.dataset.sort));
         });
+
+        // Delegación para tabla de productos: maneja botones creados dinámicamente
+        const tableContainer = document.querySelector('#tablaProductos, #tablaProductosBody, .table-container');
+        if (tableContainer) {
+            tableContainer.addEventListener('click', (ev) => {
+                const btn = ev.target.closest('button');
+                if (!btn) return;
+                const id = btn.dataset?.id;
+                if (!id) return;
+                if (btn.classList.contains('btn-editar')) {
+                    this.editarProducto(id);
+                } else if (btn.classList.contains('btn-eliminar')) {
+                    this.confirmarEliminacion(id);
+                }
+            });
+        }
     }
 
     async loadInitialData() {
         Loading.show();
         console.log('Cargando datos iniciales...');
-        
+
         try {
             // Asegurarse de que window.app esté disponible
             window.app = this;
-            
+
             await this.renderDashboard();
             console.log('Dashboard renderizado');
-            
+
             await this.renderProductTable();
             console.log('Tabla de productos renderizada');
-            
+
             await this.populateSelects();
             console.log('Selectores populados');
-            
+
             // Verificar que los event listeners estén correctamente asignados
             this.verifyEventListeners();
-            
+
             Loading.hide();
         } catch (error) {
             console.error('Error loading initial data:', error);
-            this.showNotification('Error al cargar los datos: ' + error.message, 'error');
+            this.showNotification('Error al cargar los datos: ' + (error.message || error), 'error');
             Loading.hide();
         }
     }
-    
+
     verifyEventListeners() {
         // Verificar que window.app esté disponible
         if (!window.app) {
             console.error('window.app no está definido');
             window.app = this;
         }
-        
-        // Verificar los botones de la tabla
-        const tablaProductos = document.getElementById('tablaProductos');
+
+        // Verificar los botones de la tabla (solo como comprobación adicional)
+        const tablaProductosCandidates = [
+            document.getElementById('tablaProductos'),
+            document.getElementById('tablaProductosBody'),
+            document.querySelector('#tablaProductos tbody')
+        ];
+        const tablaProductos = tablaProductosCandidates.find(x => x);
         if (tablaProductos) {
             const buttons = tablaProductos.querySelectorAll('button');
             buttons.forEach(button => {
                 if (!button.onclick) {
                     const id = button.dataset.id;
+                    if (!id) return;
                     if (button.classList.contains('btn-editar')) {
                         button.addEventListener('click', () => this.editarProducto(id));
                     } else if (button.classList.contains('btn-eliminar')) {
@@ -153,7 +177,7 @@ class SushiHouseApp {
 
         try {
             const stats = await this.api.get('/dashboard/estadisticas/');
-            
+
             const elements = {
                 totalProductos: document.getElementById('totalProductos'),
                 stockBajo: document.getElementById('stockBajo'),
@@ -162,27 +186,28 @@ class SushiHouseApp {
             };
 
             if (stats) {
-                elements.totalProductos.textContent = stats.total_productos || '0';
-                elements.stockBajo.textContent = stats.stock_bajo || '0';
-                elements.stockAgotado.textContent = stats.stock_agotado || '0';
-                elements.totalCategorias.textContent = stats.total_categorias || '0';
+                elements.totalProductos && (elements.totalProductos.textContent = stats.total_productos || '0');
+                elements.stockBajo && (elements.stockBajo.textContent = stats.stock_bajo || '0');
+                elements.stockAgotado && (elements.stockAgotado.textContent = stats.stock_agotado || '0');
+                elements.totalCategorias && (elements.totalCategorias.textContent = stats.total_categorias || '0');
             }
         } catch (error) {
             console.error('Error loading dashboard:', error);
+            // Fallback: calcular estadísticas localmente si la llamada falla
             try {
                 const [productos, categorias] = await Promise.all([
-                    this.api.get('/productos/'),
-                    this.api.get('/categorias/')
+                    this.api.get('/productos/').catch(()=>[]),
+                    this.api.get('/categorias/').catch(()=>[])
                 ]);
-                
-                const total = productos.length;
-                const bajoStock = productos.filter(p => p.stock > 0 && p.stock <= p.stock_minimo).length;
-                const agotados = productos.filter(p => p.stock === 0).length;
 
-                document.getElementById('totalProductos').textContent = total;
-                document.getElementById('stockBajo').textContent = bajoStock;
-                document.getElementById('stockAgotado').textContent = agotados;
-                document.getElementById('totalCategorias').textContent = categorias.length;
+                const total = Array.isArray(productos) ? productos.length : 0;
+                const bajoStock = Array.isArray(productos) ? productos.filter(p => (p.stock ?? 0) > 0 && (p.stock ?? 0) <= (p.stock_minimo ?? 0)).length : 0;
+                const agotados = Array.isArray(productos) ? productos.filter(p => (p.stock ?? 0) === 0).length : 0;
+
+                document.getElementById('totalProductos') && (document.getElementById('totalProductos').textContent = total);
+                document.getElementById('stockBajo') && (document.getElementById('stockBajo').textContent = bajoStock);
+                document.getElementById('stockAgotado') && (document.getElementById('stockAgotado').textContent = agotados);
+                document.getElementById('totalCategorias') && (document.getElementById('totalCategorias').textContent = (Array.isArray(categorias) ? categorias.length : 0));
             } catch (fallbackError) {
                 console.error('Error in dashboard fallback:', fallbackError);
             }
@@ -194,69 +219,80 @@ class SushiHouseApp {
     async renderProductTable(productos = null) {
         this.showTableLoading();
         console.log('Iniciando renderProductTable');
-        
+
         try {
             let productosToRender;
             if (productos) {
                 productosToRender = productos;
             } else {
                 const response = await this.api.get('/productos/');
-                productosToRender = Array.isArray(response) ? response : (response.results || []);
+                productosToRender = Array.isArray(response) ? response : (response && response.results ? response.results : []);
             }
-            
+
             console.log('Productos obtenidos:', productosToRender);
-            
-            const tablaBody = document.getElementById('tablaProductos');
-            const tableEmpty = document.getElementById('tableEmpty');
-            
+
+            // buscar el tbody de la tabla por varias opciones (compatibilidad)
+            let tablaBody = document.getElementById('tablaProductos');
+            if (!tablaBody) tablaBody = document.getElementById('tablaProductosBody');
             if (!tablaBody) {
-                console.error('No se encontró el elemento tablaProductos');
-                return;
+                const tableEl = document.querySelector('table#tablaProductos');
+                if (tableEl) tablaBody = tableEl.querySelector('tbody') || tableEl;
             }
+            const tableEmpty = document.getElementById('tableEmpty');
 
-            const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-            const endIndex = startIndex + this.itemsPerPage;
-            const paginatedProducts = productosToRender.slice(startIndex, endIndex);
-
-            tablaBody.innerHTML = '';
-
-            if (paginatedProducts.length === 0) {
-                tableEmpty.style.display = 'block';
-                this.renderPagination(0);
+            if (!tablaBody) {
+                console.error('No se encontró el elemento tablaProductos / tablaProductosBody');
                 this.hideTableLoading();
                 return;
             }
 
-            tableEmpty.style.display = 'none';
+            const totalItems = Array.isArray(productosToRender) ? productosToRender.length : 0;
+            const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+            const endIndex = startIndex + this.itemsPerPage;
+            const paginatedProducts = (productosToRender || []).slice(startIndex, endIndex);
+
+            // Si tablaBody es <table> o <tbody>, limpiar apropiadamente
+            if (tablaBody.tagName && tablaBody.tagName.toLowerCase() === 'table') {
+                // limpiar tbody si existe
+                const tb = tablaBody.querySelector('tbody');
+                if (tb) tb.innerHTML = '';
+                tablaBody = tb || tablaBody;
+            } else {
+                tablaBody.innerHTML = '';
+            }
+
+            if (paginatedProducts.length === 0) {
+                if (tableEmpty) tableEmpty.style.display = 'block';
+                this.renderPagination(totalItems);
+                this.hideTableLoading();
+                return;
+            }
+
+            if (tableEmpty) tableEmpty.style.display = 'none';
 
             for (const producto of paginatedProducts) {
                 const estado = this.getStockStatus(producto.stock, producto.stock_minimo);
                 const categoria = await this.getCategoryName(producto.categoria);
-                
+
                 const fila = document.createElement('tr');
                 const productoId = producto.id;
                 fila.innerHTML = `
-                    <td>${this.escapeHtml(producto.nombre)}</td>
-                    <td>${categoria}</td>
-                    <td>$${parseFloat(producto.precio).toFixed(2)}</td>
-                    <td>${producto.stock}</td>
+                    <td>${this.escapeHtml(String(producto.nombre || ''))}</td>
+                    <td>${this.escapeHtml(String(categoria || ''))}</td>
+                    <td>$${(producto.precio != null) ? parseFloat(producto.precio).toFixed(2) : '0.00'}</td>
+                    <td>${producto.stock ?? 0}</td>
                     <td><span class="status ${estado.clase}">${estado.texto}</span></td>
                     <td class="actions">
                         <button class="btn btn-sm btn-primary btn-editar" data-id="${productoId}">Editar</button>
                         <button class="btn btn-sm btn-danger btn-eliminar" data-id="${productoId}">Eliminar</button>
                     </td>
                 `;
-                
-                // Agregar event listeners usando delegación de eventos
-                const btnEditar = fila.querySelector('.btn-editar');
-                const btnEliminar = fila.querySelector('.btn-eliminar');
-                
-                btnEditar.addEventListener('click', () => this.editarProducto(productoId));
-                btnEliminar.addEventListener('click', () => this.confirmarEliminacion(productoId));
+
+                // Adjuntar botones (si tablaBody es <tbody> esto funcionará)
                 tablaBody.appendChild(fila);
             }
 
-            this.renderPagination(productosToRender.length);
+            this.renderPagination(totalItems);
             this.hideTableLoading();
         } catch (error) {
             console.error('Error loading products:', error);
@@ -265,6 +301,8 @@ class SushiHouseApp {
     }
 
     getStockStatus(stock, stockMinimo) {
+        stock = stock ?? 0;
+        stockMinimo = stockMinimo ?? 0;
         if (stock === 0) {
             return { texto: 'Agotado', clase: 'out-of-stock' };
         } else if (stock <= stockMinimo) {
@@ -278,9 +316,11 @@ class SushiHouseApp {
         if (!categoryId) return 'Sin categoría';
         try {
             const categoria = await this.api.get(`/categorias/${categoryId}/`);
-            return categoria.nombre;
+            // Puede devolver objeto directo o array; normalizar:
+            if (categoria && categoria.nombre) return categoria.nombre;
+            return String(categoryId);
         } catch (error) {
-            return categoryId;
+            return String(categoryId);
         }
     }
 
@@ -288,43 +328,49 @@ class SushiHouseApp {
         const pagination = document.getElementById('pagination');
         if (!pagination) return;
 
-        const totalPages = Math.ceil(totalItems / this.itemsPerPage);
-        
+        const totalPages = Math.max(1, Math.ceil(totalItems / this.itemsPerPage));
+
         if (totalPages <= 1) {
             pagination.innerHTML = '';
             return;
         }
 
         let paginationHTML = '';
-        
+
         paginationHTML += `<button class="page-btn ${this.currentPage === 1 ? 'disabled' : ''}" 
-            ${this.currentPage === 1 ? 'disabled' : ''} onclick="app.changePage(${this.currentPage - 1})">« Anterior</button>`;
-        
+            ${this.currentPage === 1 ? 'disabled' : ''} data-page="${this.currentPage - 1}">« Anterior</button>`;
+
         for (let i = 1; i <= totalPages; i++) {
             if (i === 1 || i === totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
-                paginationHTML += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" 
-                    onclick="app.changePage(${i})">${i}</button>`;
+                paginationHTML += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
             } else if (i === this.currentPage - 3 || i === this.currentPage + 3) {
                 paginationHTML += '<span class="page-dots">...</span>';
             }
         }
-        
+
         paginationHTML += `<button class="page-btn ${this.currentPage === totalPages ? 'disabled' : ''}" 
-            ${this.currentPage === totalPages ? 'disabled' : ''} onclick="app.changePage(${this.currentPage + 1})">Siguiente »</button>`;
-        
+            ${this.currentPage === totalPages ? 'disabled' : ''} data-page="${this.currentPage + 1}">Siguiente »</button>`;
+
         pagination.innerHTML = paginationHTML;
+
+        // Delegación para clicks en paginación
+        pagination.querySelectorAll('button.page-btn').forEach(btn => {
+            btn.removeEventListener('click', this._paginationClickHandler);
+            this._paginationClickHandler = (ev) => {
+                const page = parseInt(ev.currentTarget.dataset.page);
+                if (!isNaN(page)) this.changePage(page);
+            };
+            btn.addEventListener('click', this._paginationClickHandler);
+        });
     }
 
     changePage(page) {
-        const totalPages = Math.ceil(document.querySelectorAll('#tablaProductos tr').length / this.itemsPerPage);
-        if (page < 1 || page > totalPages) return;
-        
+        if (page < 1) return;
         this.currentPage = page;
         this.renderProductTable();
-        
-        document.querySelector('.table-container')?.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
+        document.querySelector('.table-container')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
         });
     }
 
@@ -337,11 +383,11 @@ class SushiHouseApp {
         }
 
         this.renderProductTable();
-        
+
         document.querySelectorAll('th[data-sort]').forEach(th => {
-            th.innerHTML = th.innerHTML.replace(' ↗', '').replace(' ↘', '');
+            th.textContent = th.textContent.replace(' ↗', '').replace(' ↘', '');
             if (th.dataset.sort === field) {
-                th.innerHTML += this.currentSort.direction === 'asc' ? ' ↗' : ' ↘';
+                th.textContent += this.currentSort.direction === 'asc' ? ' ↗' : ' ↘';
             }
         });
     }
@@ -355,7 +401,7 @@ class SushiHouseApp {
                 const currentValue = e.target.value;
                 if (currentValue === lastValue) return;
                 lastValue = currentValue;
-                
+
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
                     this.handleSearch(currentValue);
@@ -367,12 +413,12 @@ class SushiHouseApp {
     async handleSearch(termino) {
         this.currentPage = 1;
         try {
-            if (termino.trim() === '') {
+            if (!termino || termino.trim() === '') {
                 const productos = await this.api.get('/productos/');
                 this.renderProductTable(productos);
                 return;
             }
-            const productos = await this.api.get(`/productos/?search=${termino}`);
+            const productos = await this.api.get(`/productos/?search=${encodeURIComponent(termino)}`);
             this.renderProductTable(productos);
         } catch (error) {
             console.error('Error searching products:', error);
@@ -391,8 +437,8 @@ class SushiHouseApp {
             if (!select) return;
 
             select.innerHTML = '<option value="">Seleccione una categoría</option>';
-            
-            categorias.forEach(categoria => {
+
+            (categorias || []).forEach(categoria => {
                 const option = document.createElement('option');
                 option.value = categoria.id;
                 option.textContent = categoria.nombre;
@@ -410,8 +456,8 @@ class SushiHouseApp {
             if (!select) return;
 
             select.innerHTML = '<option value="">Seleccione un proveedor</option>';
-            
-            proveedores.forEach(proveedor => {
+
+            (proveedores || []).forEach(proveedor => {
                 const option = document.createElement('option');
                 option.value = proveedor.id;
                 option.textContent = proveedor.nombre;
@@ -425,60 +471,62 @@ class SushiHouseApp {
     showProductForm(producto = null) {
         this.isEditing = !!producto;
         this.currentProductId = producto ? producto.id : null;
-        
+
         const modal = document.getElementById('modalProducto');
         const title = document.getElementById('modalTitle');
         const form = document.getElementById('productForm');
-        
+
         if (producto) {
-            title.textContent = 'Editar Producto';
+            title && (title.textContent = 'Editar Producto');
             this.populateForm(producto);
         } else {
-            title.textContent = 'Nuevo Producto';
-            form.reset();
-            document.getElementById('descripcionCounter').textContent = '0';
+            title && (title.textContent = 'Nuevo Producto');
+            form && form.reset();
+            const counter = document.getElementById('descripcionCounter');
+            if (counter) counter.textContent = '0';
         }
-        
-        validator.clearFieldErrors(form);
-        modal.classList.add('show');
-        
-        validator.setupRealTimeValidation(form);
+
+        if (form) validator.clearFieldErrors(form);
+        modal && modal.classList.add('show');
+
+        if (form) validator.setupRealTimeValidation(form);
     }
 
     hideProductForm() {
         const modal = document.getElementById('modalProducto');
-        modal.classList.remove('show');
+        modal && modal.classList.remove('show');
         this.isEditing = false;
         this.currentProductId = null;
     }
 
     populateForm(producto) {
-        document.getElementById('nombre').value = producto.nombre || '';
-        document.getElementById('categoria').value = producto.categoria || '';
-        document.getElementById('precio').value = producto.precio || '';
-        document.getElementById('stock').value = producto.stock || '';
-        document.getElementById('stockMinimo').value = producto.stock_minimo || '';
-        document.getElementById('proveedor').value = producto.proveedor || '';
-        document.getElementById('descripcion').value = producto.descripcion || '';
-        document.getElementById('descripcionCounter').textContent = (producto.descripcion || '').length;
+        document.getElementById('nombre') && (document.getElementById('nombre').value = producto.nombre || '');
+        document.getElementById('categoria') && (document.getElementById('categoria').value = producto.categoria || '');
+        document.getElementById('precio') && (document.getElementById('precio').value = producto.precio || '');
+        document.getElementById('stock') && (document.getElementById('stock').value = producto.stock || '');
+        document.getElementById('stockMinimo') && (document.getElementById('stockMinimo').value = producto.stock_minimo || '');
+        document.getElementById('proveedor') && (document.getElementById('proveedor').value = producto.proveedor || '');
+        document.getElementById('descripcion') && (document.getElementById('descripcion').value = producto.descripcion || '');
+        const descCounter = document.getElementById('descripcionCounter');
+        if (descCounter) descCounter.textContent = (producto.descripcion || '').length;
     }
 
     async handleFormSubmit(e) {
         e.preventDefault();
-        
+
         const form = e.target;
         const formData = new FormData(form);
         const productoData = Object.fromEntries(formData.entries());
-        
+
         // Convertir campos numéricos
         productoData.precio = parseFloat(productoData.precio) || 0;
         productoData.stock = parseInt(productoData.stock) || 0;
         productoData.stock_minimo = parseInt(productoData.stockMinimo) || 0;
-        
+
         // Manejar campos de relación
         productoData.categoria = productoData.categoria || null;
         productoData.proveedor = productoData.proveedor || null;
-        
+
         if (this.isEditing) {
             productoData.id = this.currentProductId;
         }
@@ -506,13 +554,13 @@ class SushiHouseApp {
                     'success'
                 );
                 this.hideProductForm();
-                this.renderDashboard();
-                this.renderProductTable();
+                await this.renderDashboard();
+                await this.renderProductTable();
             } else {
                 throw new Error('Error al guardar el producto');
             }
         } catch (error) {
-            this.showNotification('Error al guardar el producto: ' + error.message, 'error');
+            this.showNotification('Error al guardar el producto: ' + (error.message || error), 'error');
         } finally {
             this.setFormLoading(false);
         }
@@ -522,15 +570,15 @@ class SushiHouseApp {
         const btnSubmit = document.getElementById('btnSubmit');
         const btnLoading = document.getElementById('btnLoading');
         const btnText = document.getElementById('btnText');
-        
+
         if (loading) {
-            btnSubmit.disabled = true;
-            btnLoading.style.display = 'inline-block';
-            btnText.textContent = this.isEditing ? 'Actualizando...' : 'Guardando...';
+            if (btnSubmit) btnSubmit.disabled = true;
+            if (btnLoading) btnLoading.style.display = 'inline-block';
+            if (btnText) btnText.textContent = this.isEditing ? 'Actualizando...' : 'Guardando...';
         } else {
-            btnSubmit.disabled = false;
-            btnLoading.style.display = 'none';
-            btnText.textContent = this.isEditing ? 'Actualizar Producto' : 'Guardar Producto';
+            if (btnSubmit) btnSubmit.disabled = false;
+            if (btnLoading) btnLoading.style.display = 'none';
+            if (btnText) btnText.textContent = this.isEditing ? 'Actualizar Producto' : 'Guardar Producto';
         }
     }
 
@@ -542,11 +590,11 @@ class SushiHouseApp {
 
         console.log('Editando producto:', id);
         Loading.show();
-        
+
         try {
             const producto = await this.api.get(`/productos/${id}/`);
             console.log('Producto obtenido:', producto);
-            
+
             if (producto) {
                 this.showProductForm(producto);
             } else {
@@ -554,7 +602,7 @@ class SushiHouseApp {
             }
         } catch (error) {
             console.error('Error al editar producto:', error);
-            this.showNotification('Error al cargar el producto: ' + error.message, 'error');
+            this.showNotification('Error al cargar el producto: ' + (error.message || error), 'error');
         } finally {
             Loading.hide();
         }
@@ -575,7 +623,7 @@ class SushiHouseApp {
 
     hideConfirmModal() {
         const modal = document.getElementById('modalConfirm');
-        modal.classList.remove('show');
+        modal && modal.classList.remove('show');
     }
 
     async eliminarProducto(id) {
@@ -586,7 +634,7 @@ class SushiHouseApp {
 
         this.hideConfirmModal();
         Loading.show();
-        
+
         try {
             await this.api.delete(`/productos/${id}/`);
             this.showNotification('Producto eliminado correctamente', 'success');
@@ -603,34 +651,34 @@ class SushiHouseApp {
     async exportData() {
         try {
             const productos = await this.api.get('/productos/');
-            const csvContent = this.convertToCSV(productos);
+            const csvContent = this.convertToCSV(productos || []);
             this.downloadCSV(csvContent, 'productos_sushihouse.csv');
             this.showNotification('Datos exportados correctamente', 'success');
         } catch (error) {
-            this.showNotification('Error al exportar datos: ' + error.message, 'error');
+            this.showNotification('Error al exportar datos: ' + (error.message || error), 'error');
         }
     }
 
     convertToCSV(data) {
-        if (data.length === 0) return '';
-        
+        if (!Array.isArray(data) || data.length === 0) return '';
+
         const headers = ['Nombre', 'Categoría', 'Precio', 'Stock', 'Stock Mínimo', 'Proveedor', 'Estado'];
         const csvRows = [headers.join(',')];
-        
+
         data.forEach(item => {
             const estado = this.getStockStatus(item.stock, item.stock_minimo);
             const row = [
-                `"${item.nombre}"`,
-                `"${item.categoria_nombre || ''}"`,
+                `"${(item.nombre || '').replace(/"/g, '""')}"`,
+                `"${(item.categoria_nombre || '')}"`,
                 item.precio,
                 item.stock,
                 item.stock_minimo,
-                `"${item.proveedor_nombre || ''}"`,
+                `"${(item.proveedor_nombre || '')}"`,
                 `"${estado.texto}"`
             ];
             csvRows.push(row.join(','));
         });
-        
+
         return csvRows.join('\n');
     }
 
@@ -638,11 +686,11 @@ class SushiHouseApp {
         const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
-        
+
         link.setAttribute('href', url);
         link.setAttribute('download', filename);
         link.style.visibility = 'hidden';
-        
+
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -651,17 +699,22 @@ class SushiHouseApp {
     showNotification(message, type = 'info') {
         const container = document.getElementById('notifications');
         if (!container) return;
-        
+
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.innerHTML = `
             <span class="notification-icon">${this.getNotificationIcon(type)}</span>
             <span class="notification-message">${message}</span>
-            <button class="btn-close btn-close-sm" onclick="this.parentElement.remove()">&times;</button>
+            <button class="btn-close btn-close-sm" aria-label="Cerrar">&times;</button>
         `;
-        
+
         container.appendChild(notification);
-        
+
+        // Cerrar con botón (delegación en la notificación misma)
+        notification.querySelector('.btn-close')?.addEventListener('click', () => {
+            notification.remove();
+        });
+
         setTimeout(() => {
             if (notification.parentElement) {
                 notification.remove();
@@ -679,8 +732,8 @@ class SushiHouseApp {
         return icons[type] || 'ℹ️';
     }
 
-    escapeHtml(unsafe) {
-        return unsafe
+    escapeHtml(unsafe = '') {
+        return String(unsafe)
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
@@ -688,4 +741,7 @@ class SushiHouseApp {
             .replace(/'/g, "&#039;");
     }
 }
+
+// Exponer la clase explícitamente en window para garantizar detección robusta
+window.SushiHouseApp = SushiHouseApp;
 

@@ -30,6 +30,7 @@
                         <li><a href="proveedores.html">Proveedores</a></li>
                         <li><a href="usuarios.html">Usuarios</a></li>
                         <li><a href="reportes.html">Reportes</a></li>
+                        <li><a href="configuracion.html">Configuración</a></li>
                     </ul>
                 </nav>
                 <div class="user-menu">
@@ -94,7 +95,7 @@
                 </div>
             </div>
             <div class="table-container">
-                <table>
+                <table id="tablaCategoriasTable">
                     <thead>
                         <tr>
                             <th data-sort="nombre">Categoría ↗</th>
@@ -118,11 +119,11 @@
         </section>
 
         <!-- MODAL FORMULARIO CATEGORÍA -->
-        <div id="modalCategoria" class="modal">
+        <div id="modalCategoria" class="modal" role="dialog" aria-hidden="true">
             <div class="modal-content">
                 <div class="modal-header">
                     <h3 id="modalTitleCategoria">Nueva Categoría</h3>
-                    <button class="btn-close" id="btnCloseModalCategoria">&times;</button>
+                    <button class="btn-close" id="btnCloseModalCategoria" aria-label="Cerrar">&times;</button>
                 </div>
                 <form id="categoriaForm" class="modal-form">
                     <div class="form-group">
@@ -158,7 +159,7 @@
         </div>
 
         <!-- MODAL CONFIRMACIÓN -->
-        <div id="modalConfirm" class="modal">
+        <div id="modalConfirm" class="modal" role="dialog" aria-hidden="true">
             <div class="modal-content confirm-modal">
                 <div class="modal-header">
                     <h3>Confirmar acción</h3>
@@ -179,9 +180,9 @@
     <script src="js/api.js"></script>
     <script src="js/validation.js"></script>
     <script src="js/auth.js"></script>
+
     <script src="js/script.js"></script>
     <script src="js/app.js"></script>
     <script src="js/categorias.js"></script>
-
 </body>
 </html>
