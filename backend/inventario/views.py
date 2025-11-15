@@ -137,6 +137,24 @@ class ConfiguracionSistemaViewSet(viewsets.ModelViewSet):
         if not ConfiguracionSistema.objects.exists():
             ConfiguracionSistema.objects.create()
         return ConfiguracionSistema.objects.all()
+    
+    def list(self, request, *args, **kwargs):
+        # Retornar siempre la primera (y única) configuración
+        config = ConfiguracionSistema.objects.first()
+        if not config:
+            config = ConfiguracionSistema.objects.create()
+        serializer = self.get_serializer(config)
+        return Response(serializer.data)
+    
+    def create(self, request, *args, **kwargs):
+        # Si ya existe, actualizar en lugar de crear
+        config = ConfiguracionSistema.objects.first()
+        if config:
+            serializer = self.get_serializer(config, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        return super().create(request, *args, **kwargs)
 
 
 class UsuarioActualView(APIView):
