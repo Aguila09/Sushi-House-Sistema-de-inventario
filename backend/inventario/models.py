@@ -54,11 +54,39 @@ class ConfiguracionSistema(models.Model):
     """
     Configuración del sistema según diagrama ER
     """
-    nombre_restaurante = models.CharField(max_length=100, default="SushiHouse")
+    # Configuración General
+    nombre_restaurante = models.CharField(max_length=100, default="Sushi House")
     moneda = models.CharField(max_length=10, default="MXN")
     iva = models.DecimalField(max_digits=5, decimal_places=2, default=16.0)
-    notificaciones_stock = models.BooleanField(default=True)
-    email_notificacion = models.EmailField(blank=True, default='')
+    formato_fecha = models.CharField(max_length=20, default="dd/mm/yyyy")
+    direccion_restaurante = models.CharField(max_length=200, blank=True, default='')
+    telefono_restaurante = models.CharField(max_length=20, blank=True, default='')
+    
+    # Configuración de Inventario
+    stock_minimo_global = models.IntegerField(default=10)
+    alerta_stock_bajo = models.CharField(max_length=5, default="si")
+    unidad_medida = models.CharField(max_length=20, default="unidades")
+    categoria_predeterminada = models.ForeignKey('Categoria', on_delete=models.SET_NULL, null=True, blank=True)
+    control_caducidad = models.BooleanField(default=False)
+    notificaciones_automaticas = models.BooleanField(default=False)
+    
+    # Configuración de Notificaciones
+    email_notificaciones = models.EmailField(blank=True, default='')
+    notif_stock_bajo = models.BooleanField(default=True)
+    notif_stock_agotado = models.BooleanField(default=True)
+    notif_productos_caducados = models.BooleanField(default=False)
+    notif_pedidos_pendientes = models.BooleanField(default=False)
+    notif_reportes_automaticos = models.BooleanField(default=False)
+    notif_actividad_usuarios = models.BooleanField(default=False)
+    frecuencia_reportes = models.CharField(max_length=20, default="semanal")
+    hora_notificaciones = models.TimeField(default="09:00")
+    
+    # Configuración de Seguridad
+    tiempo_sesion = models.IntegerField(default=30)
+    intentos_fallidos = models.IntegerField(default=3)
+    requerir_confirmacion = models.BooleanField(default=False)
+    registro_actividad = models.BooleanField(default=True)
+    backup_automatico = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Configuración del Sistema"

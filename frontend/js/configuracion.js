@@ -25,12 +25,23 @@ class ConfiguracionManager {
 
         // Modal de confirmación
         document.getElementById('btnConfirmCancel')?.addEventListener('click', () => this.hideConfirmModal());
+        
+        // Character counter for direccion
+        document.getElementById('direccionRestaurante')?.addEventListener('input', (e) => {
+            const counter = document.getElementById('direccionCounter');
+            if (counter) {
+                counter.textContent = e.target.value.length;
+            }
+        });
     }
 
     async loadConfiguracion() {
         try {
             // Cargar configuración desde la API
             const configFromAPI = await this.api.get('/configuracion/');
+            
+            // Cargar categorías para el selector
+            await this.loadCategorias();
             
             // Combinar con configuración local
             this.configuracion = {
@@ -46,41 +57,62 @@ class ConfiguracionManager {
             this.populateForms();
         }
     }
+    
+    async loadCategorias() {
+        try {
+            const categorias = await this.api.get('/categorias/');
+            const selectCategoria = document.getElementById('categoriaPredeterminada');
+            if (selectCategoria && Array.isArray(categorias)) {
+                selectCategoria.innerHTML = '<option value="">Seleccione una categoría</option>';
+                categorias.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat.id;
+                    option.textContent = cat.nombre;
+                    selectCategoria.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error cargando categorías:', error);
+        }
+    }
 
     populateForms() {
         // Configuración General
-        document.getElementById('nombreRestaurante').value = this.configuracion.nombreRestaurante || '';
+        document.getElementById('nombreRestaurante').value = this.configuracion.nombreRestaurante || this.configuracion.nombre_restaurante || '';
         document.getElementById('moneda').value = this.configuracion.moneda || 'MXN';
         document.getElementById('iva').value = this.configuracion.iva || 16;
-        document.getElementById('formatoFecha').value = this.configuracion.formatoFecha || 'dd/mm/yyyy';
-        document.getElementById('direccionRestaurante').value = this.configuracion.direccionRestaurante || '';
-        document.getElementById('telefonoRestaurante').value = this.configuracion.telefonoRestaurante || '';
-        document.getElementById('direccionCounter').textContent = (this.configuracion.direccionRestaurante || '').length;
+        document.getElementById('formatoFecha').value = this.configuracion.formatoFecha || this.configuracion.formato_fecha || 'dd/mm/yyyy';
+        document.getElementById('direccionRestaurante').value = this.configuracion.direccionRestaurante || this.configuracion.direccion_restaurante || '';
+        document.getElementById('telefonoRestaurante').value = this.configuracion.telefonoRestaurante || this.configuracion.telefono_restaurante || '';
+        document.getElementById('direccionCounter').textContent = (this.configuracion.direccionRestaurante || this.configuracion.direccion_restaurante || '').length;
 
         // Configuración de Inventario
-        document.getElementById('stockMinimoGlobal').value = this.configuracion.stockMinimoGlobal || 10;
-        document.getElementById('alertaStockBajo').value = this.configuracion.alertaStockBajo || 'si';
-        document.getElementById('unidadMedida').value = this.configuracion.unidadMedida || 'unidades';
-        document.getElementById('controlCaducidad').checked = this.configuracion.controlCaducidad || false;
-        document.getElementById('notificacionesAutomaticas').checked = this.configuracion.notificacionesAutomaticas || false;
+        document.getElementById('stockMinimoGlobal').value = this.configuracion.stockMinimoGlobal || this.configuracion.stock_minimo_global || 10;
+        document.getElementById('alertaStockBajo').value = this.configuracion.alertaStockBajo || this.configuracion.alerta_stock_bajo || 'si';
+        document.getElementById('unidadMedida').value = this.configuracion.unidadMedida || this.configuracion.unidad_medida || 'unidades';
+        if (this.configuracion.categoriaPredeterminada || this.configuracion.categoria_predeterminada) {
+            document.getElementById('categoriaPredeterminada').value = this.configuracion.categoriaPredeterminada || this.configuracion.categoria_predeterminada || '';
+        }
+        document.getElementById('controlCaducidad').checked = this.configuracion.controlCaducidad || this.configuracion.control_caducidad || false;
+        document.getElementById('notificacionesAutomaticas').checked = this.configuracion.notificacionesAutomaticas || this.configuracion.notificaciones_automaticas || false;
 
         // Configuración de Notificaciones
-        document.getElementById('emailNotificaciones').value = this.configuracion.emailNotificaciones || '';
-        document.getElementById('notifStockBajo').checked = this.configuracion.notifStockBajo !== false;
-        document.getElementById('notifStockAgotado').checked = this.configuracion.notifStockAgotado !== false;
-        document.getElementById('notifProductosCaducados').checked = this.configuracion.notifProductosCaducados || false;
-        document.getElementById('notifPedidosPendientes').checked = this.configuracion.notifPedidosPendientes || false;
-        document.getElementById('notifReportesAutomaticos').checked = this.configuracion.notifReportesAutomaticos || false;
-        document.getElementById('notifActividadUsuarios').checked = this.configuracion.notifActividadUsuarios || false;
-        document.getElementById('frecuenciaReportes').value = this.configuracion.frecuenciaReportes || 'semanal';
-        document.getElementById('horaNotificaciones').value = this.configuracion.horaNotificaciones || '09:00';
+        document.getElementById('emailNotificaciones').value = this.configuracion.emailNotificaciones || this.configuracion.email_notificaciones || '';
+        document.getElementById('notifStockBajo').checked = this.configuracion.notifStockBajo !== false && this.configuracion.notif_stock_bajo !== false;
+        document.getElementById('notifStockAgotado').checked = this.configuracion.notifStockAgotado !== false && this.configuracion.notif_stock_agotado !== false;
+        document.getElementById('notifProductosCaducados').checked = this.configuracion.notifProductosCaducados || this.configuracion.notif_productos_caducados || false;
+        document.getElementById('notifPedidosPendientes').checked = this.configuracion.notifPedidosPendientes || this.configuracion.notif_pedidos_pendientes || false;
+        document.getElementById('notifReportesAutomaticos').checked = this.configuracion.notifReportesAutomaticos || this.configuracion.notif_reportes_automaticos || false;
+        document.getElementById('notifActividadUsuarios').checked = this.configuracion.notifActividadUsuarios || this.configuracion.notif_actividad_usuarios || false;
+        document.getElementById('frecuenciaReportes').value = this.configuracion.frecuenciaReportes || this.configuracion.frecuencia_reportes || 'semanal';
+        document.getElementById('horaNotificaciones').value = this.configuracion.horaNotificaciones || this.configuracion.hora_notificaciones || '09:00';
 
         // Configuración de Seguridad
-        document.getElementById('tiempoSesion').value = this.configuracion.tiempoSesion || 30;
-        document.getElementById('intentosFallidos').value = this.configuracion.intentosFallidos || 3;
-        document.getElementById('requerirConfirmacion').checked = this.configuracion.requerirConfirmacion || false;
-        document.getElementById('registroActividad').checked = this.configuracion.registroActividad !== false;
-        document.getElementById('backupAutomatico').checked = this.configuracion.backupAutomatico || false;
+        document.getElementById('tiempoSesion').value = this.configuracion.tiempoSesion || this.configuracion.tiempo_sesion || 30;
+        document.getElementById('intentosFallidos').value = this.configuracion.intentosFallidos || this.configuracion.intentos_fallidos || 3;
+        document.getElementById('requerirConfirmacion').checked = this.configuracion.requerirConfirmacion || this.configuracion.requerir_confirmacion || false;
+        document.getElementById('registroActividad').checked = (this.configuracion.registroActividad !== false) && (this.configuracion.registro_actividad !== false);
+        document.getElementById('backupAutomatico').checked = this.configuracion.backupAutomatico || this.configuracion.backup_automatico || false;
     }
 
     async handleGeneralSubmit(e) {
@@ -313,7 +345,10 @@ class ConfiguracionManager {
         const newBtnAccept = btnAccept.cloneNode(true);
         btnAccept.parentNode.replaceChild(newBtnAccept, btnAccept);
         
-        newBtnAccept.addEventListener('click', onConfirm);
+        newBtnAccept.addEventListener('click', () => {
+            this.hideConfirmModal();
+            onConfirm();
+        });
         modal.classList.add('show');
     }
 
