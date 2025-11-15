@@ -345,7 +345,10 @@ class ConfiguracionManager {
         const newBtnAccept = btnAccept.cloneNode(true);
         btnAccept.parentNode.replaceChild(newBtnAccept, btnAccept);
         
-        newBtnAccept.addEventListener('click', onConfirm);
+        newBtnAccept.addEventListener('click', () => {
+            this.hideConfirmModal();
+            onConfirm();
+        });
         modal.classList.add('show');
     }
 
