@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Productos - Sushi House</title>
+    <meta name="description" content="Gestión de productos - Sushi House">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/loading.css">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
 </head>
 <body>
     <!-- HEADER -->
@@ -37,6 +39,9 @@
         </div>
     </header>
 
+    <!-- NOTIFICACIONES (igual que en index.html) -->
+    <div id="notifications" class="notifications-container"></div>
+
     <!-- CONTENIDO PRINCIPAL -->
     <main class="container">
         <div class="page-title">
@@ -46,13 +51,52 @@
             </button>
         </div>
 
-        <!-- TABLA DE PRODUCTOS -->
+        <!-- DASHBOARD (idéntico) -->
+        <section class="dashboard">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Productos en Stock</h3>
+                    <div class="card-icon primary">📦</div>
+                </div>
+                <div class="card-value" id="totalProductos">0</div>
+                <div class="card-title">Productos registrados</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Stock Bajo</h3>
+                    <div class="card-icon warning">⚠️</div>
+                </div>
+                <div class="card-value" id="productosStockBajo">0</div>
+                <div class="card-title">Productos con stock bajo</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Categorías</h3>
+                    <div class="card-icon success">🏷️</div>
+                </div>
+                <div class="card-value" id="totalCategorias">0</div>
+                <div class="card-title">Categorías activas</div>
+            </div>
+        </section>
+
+        <!-- TABLA DE PRODUCTOS con buscador IGUAL que en index.html -->
         <section>
+            <div class="section-header">
+                <h3>Productos</h3>
+                <div class="table-actions">
+                    <!-- buscador exactamente igual al de index.html -->
+                    <input type="text" id="searchInput" placeholder="Buscar productos..." class="search-input">
+                </div>
+            </div>
+
             <div class="table-container">
-                <div class="table-loading" id="tableLoading">
+                <div class="table-loading" id="tableLoading" style="display:none;">
                     <div class="spinner"></div>
                     <p>Cargando productos...</p>
                 </div>
+
                 <table id="tablaProductosTable">
                     <thead>
                         <tr>
@@ -68,17 +112,19 @@
                         <!-- Filas inyectadas por JS -->
                     </tbody>
                 </table>
+
                 <div class="table-empty" id="tableEmpty" style="display: none;">
                     <p>No se encontraron productos</p>
                 </div>
             </div>
+
             <div class="pagination" id="pagination">
                 <!-- Paginación generada dinámicamente -->
             </div>
         </section>
     </main>
 
-    <!-- MODAL FORMULARIO PRODUCTO (para que la página sea funcional) -->
+    <!-- MODAL FORMULARIO PRODUCTO (idéntico a index.html) -->
     <div id="modalProducto" class="modal" role="dialog" aria-hidden="true">
         <div class="modal-content">
             <div class="modal-header">
@@ -143,7 +189,7 @@
         </div>
     </div>
 
-    <!-- MODAL CONFIRMACIÓN -->
+    <!-- MODAL CONFIRMACIÓN (idéntico a index.html) -->
     <div id="modalConfirm" class="modal" role="dialog" aria-hidden="true">
         <div class="modal-content confirm-modal">
             <div class="modal-header">
@@ -159,12 +205,21 @@
         </div>
     </div>
 
-    <!-- scripts -->
+    <!-- SCRIPTS (mismo orden que en index.html) -->
     <script src="js/storage.js"></script>
     <script src="js/loading.js"></script>
     <script src="js/api.js"></script>
     <script src="js/validation.js"></script>
+    <script src="js/confirmation.js"></script>
     <script src="js/auth.js"></script>
+
+    <script>
+    // comprobaciones ligeras (opcional)
+    window.addEventListener('load', function() {
+        if (!window.ApiClient) console.warn('ApiClient no está disponible');
+        if (!window.ValidationSystem && typeof validator === 'undefined') console.warn('ValidationSystem no está disponible');
+    });
+    </script>
 
     <script src="js/script.js"></script>
     <script src="js/app.js"></script>

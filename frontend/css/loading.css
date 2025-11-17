@@ -48,3 +48,16 @@
 .loading-screen[aria-hidden="true"] {
     pointer-events: none;
 }
+
+.modal.readonly-mode .modal-form input,
+.modal.readonly-mode .modal-form select,
+.modal.readonly-mode .modal-form textarea {
+  pointer-events: none;
+  background-color: #f5f6f8;
+  color: #333;
+}
+.modal.readonly-mode .modal-form input:focus,
+.modal.readonly-mode .modal-form select:focus,
+.modal.readonly-mode .modal-form textarea:focus {
+  outline: none;
+}

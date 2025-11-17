@@ -18,8 +18,8 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from inventario import views
-from inventario.auth import ResolveUserView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from inventario.auth import ResolveUserView, CustomTokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 router = routers.DefaultRouter()
 router.register(r'categorias', views.CategoriaViewSet, basename='categorias')
@@ -31,11 +31,14 @@ router.register(r'configuracion', views.ConfiguracionSistemaViewSet, basename='c
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
-    # CORREGIDO: Cambiado a /api/token/ para que coincida con el frontend
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # Token con validación de intentos fallidos
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     # NUEVOS ENDPOINTS REQUERIDOS POR EL FRONTEND
     path('api/usuarios/me/', views.UsuarioActualView.as_view(), name='usuario_actual'),
     path('api/auth/resolve-user/', ResolveUserView.as_view(), name='resolve_user'),
     path('api/dashboard/estadisticas/', views.DashboardEstadisticasView.as_view(), name='dashboard_estadisticas'),
+    path('api/backup/', views.BackupView.as_view(), name='backup'),
+    path('api/restore/', views.RestoreView.as_view(), name='restore'),
+    path('api/system/reset/', views.SystemResetView.as_view(), name='system_reset'),
 ]

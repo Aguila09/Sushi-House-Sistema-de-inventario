@@ -117,30 +117,69 @@ class ValidationSystem {
         return { isValid, errors };
     }
 
-    // Validación específica para productos
+    // validateProducto (SÍNCRONO)
     validateProducto(producto) {
-        const baseValidation = this.validateForm(producto);
-        
-        if (!baseValidation.isValid) {
-            return baseValidation;
+        // producto: { id, nombre, descripcion, stock_minimo, stock_actual, precio, categoriaId, ... }
+        const errors = [];
+
+        // NOMBRE
+        const nombre = (producto.nombre || '').trim();
+        if (!nombre) {
+            errors.push('El nombre del producto es obligatorio.');
+        } else if (nombre.length < 2) {
+            errors.push('El nombre debe tener al menos 2 caracteres.');
         }
 
-        // Validación adicional: nombre único
-        const productos = storage.getProductos();
-        const nombreExiste = productos.some(p => 
-            p.nombre.toLowerCase() === producto.nombre.toLowerCase() && 
-            p.id !== (producto.id || null)
-        );
+        // STOCK_MÍNIMO y STOCK_ACTUAL: permitir stock_actual < stock_minimo.
+        const stockMin = Number(producto.stock_minimo);
+        const stockAct = Number(producto.stock_actual);
 
-        if (nombreExiste) {
-            return {
-                isValid: false,
-                errors: { nombre: 'Ya existe un producto con este nombre' }
-            };
+        if (Number.isNaN(stockMin) || stockMin < 0) {
+            errors.push('Stock mínimo debe ser un número mayor o igual a 0.');
+        }
+        if (Number.isNaN(stockAct) || stockAct < 0) {
+            errors.push('Stock actual debe ser un número mayor o igual a 0.');
+        }
+        // NOTA: no se exige stockAct >= stockMin, así lo solicitaste.
+
+        // PRECIO
+        const precio = Number(producto.precio);
+        if (Number.isNaN(precio) || precio < 0) {
+            errors.push('Precio inválido.');
         }
 
-        return baseValidation;
+        // UNICIDAD DEL NOMBRE (comprobar en cache local si existe)
+        try {
+            const productos = (typeof storage !== 'undefined' && typeof storage.getProductos === 'function')
+                ? storage.getProductos()
+                : (function(){
+                    // intento fallback a localStorage si storage no existe
+                    try {
+                        const raw = localStorage.getItem('productos');
+                        return raw ? JSON.parse(raw) : [];
+                    } catch(e) {
+                        return [];
+                    }
+                })();
+
+            if (Array.isArray(productos)) {
+                const nombreLower = nombre.toLowerCase();
+                const existe = productos.some(p => {
+                    // si estamos editando, ignorar el mismo id
+                    if (producto.id && (String(p.id) === String(producto.id) || p.id === producto.id)) return false;
+                    return (p.nombre || '').toLowerCase() === nombreLower;
+                });
+                if (existe) errors.push('Ya existe un producto con ese nombre.');
+            }
+        } catch (e) {
+            // No queremos romper la validación por un error de lectura, solo lo reportamos.
+            console.warn('validateProducto: no se pudo leer storage para verificar unicidad', e);
+        }
+
+        return { valid: errors.length === 0, errors: errors };
     }
+
+
 
     // Validación específica para usuarios
     validateUsuario(usuario) {

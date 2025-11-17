@@ -7,6 +7,8 @@ class CategoriasManager {
         this.currentCategoriaId = null;
         this.isEditing = false;
         this.api = apiClient;
+        // referencia para controlar listeners del confirm modal
+        this._confirmHandlers = { accept: null, cancel: null };
         this.init();
     }
 
@@ -23,13 +25,15 @@ class CategoriasManager {
         document.getElementById('categoriaForm')?.addEventListener('submit', (e) => this.handleFormSubmit(e));
         document.getElementById('btnConfirmCancel')?.addEventListener('click', () => this.hideConfirmModal());
         
+        // Cerrar modales al click en el overlay (si el objetivo tiene clase 'modal')
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) {
+            if (e.target && e.target.classList && e.target.classList.contains('modal')) {
                 this.hideCategoriaForm();
                 this.hideConfirmModal();
             }
         });
 
+        // Sort headers
         document.querySelectorAll('th[data-sort]').forEach(th => {
             th.addEventListener('click', () => this.handleSort(th.dataset.sort));
         });
@@ -70,13 +74,17 @@ class CategoriasManager {
             const categorias = await this.api.get('/categorias/');
             const productos = await this.api.get('/productos/');
             
-            const totalCategorias = categorias.length;
-            const categoriasActivas = categorias.filter(c => c.activo).length;
-            const totalProductos = productos.length;
+            const totalCategorias = Array.isArray(categorias) ? categorias.length : 0;
+            const categoriasActivas = (categorias || []).filter(c => c && c.activo).length;
+            const totalProductos = Array.isArray(productos) ? productos.length : 0;
             
-            document.getElementById('totalCategorias').textContent = totalCategorias;
-            document.getElementById('categoriasActivas').textContent = categoriasActivas;
-            document.getElementById('totalProductosCategorias').textContent = totalProductos;
+            const elTotal = document.getElementById('totalCategorias');
+            const elActivas = document.getElementById('categoriasActivas');
+            const elProductos = document.getElementById('totalProductosCategorias');
+
+            if (elTotal) elTotal.textContent = String(totalCategorias);
+            if (elActivas) elActivas.textContent = String(categoriasActivas);
+            if (elProductos) elProductos.textContent = String(totalProductos);
         } catch (error) {
             console.error('Error loading dashboard:', error);
         }
@@ -84,7 +92,8 @@ class CategoriasManager {
 
     async renderCategoriasTable(categorias = null) {
         try {
-            const categoriasToRender = categorias || await this.api.get('/categorias/');
+            const categoriasData = categorias || await this.api.get('/categorias/');
+            const categoriasToRender = Array.isArray(categoriasData) ? categoriasData : (categoriasData && categoriasData.results ? categoriasData.results : []);
             const tablaBody = document.getElementById('tablaCategorias');
             const tableEmpty = document.getElementById('tableEmptyCategorias');
             
@@ -92,11 +101,11 @@ class CategoriasManager {
 
             const startIndex = (this.currentPage - 1) * this.itemsPerPage;
             const endIndex = startIndex + this.itemsPerPage;
-            const paginatedCategorias = categoriasToRender.slice(startIndex, endIndex);
+            const paginatedCategorias = (categoriasToRender || []).slice(startIndex, endIndex);
 
             tablaBody.innerHTML = '';
 
-            if (paginatedCategorias.length === 0) {
+            if (!paginatedCategorias || paginatedCategorias.length === 0) {
                 if (tableEmpty) tableEmpty.style.display = 'block';
                 this.renderPagination(0);
                 return;
@@ -105,19 +114,25 @@ class CategoriasManager {
             if (tableEmpty) tableEmpty.style.display = 'none';
 
             for (const categoria of paginatedCategorias) {
-                // Obtener conteo de productos para esta categoría
-                const productos = await this.api.get(`/productos/?categoria=${categoria.id}`);
-                const countProductos = productos.length;
+                // Obtener conteo de productos para esta categoría (si falla, asumir 0)
+                let productos = [];
+                try {
+                    productos = await this.api.get(`/productos/?categoria=${categoria.id}`);
+                } catch (err) {
+                    productos = [];
+                }
+                const countProductos = Array.isArray(productos) ? productos.length : (productos && productos.count ? productos.count : 0);
                 
                 const fila = document.createElement('tr');
+                fila.setAttribute('data-id', categoria.id);
                 fila.innerHTML = `
                     <td>${this.escapeHtml(categoria.nombre)}</td>
                     <td>${this.escapeHtml(categoria.descripcion || '')}</td>
                     <td>${countProductos}</td>
                     <td><span class="status ${categoria.activo ? 'in-stock' : 'out-of-stock'}">${categoria.activo ? 'Activa' : 'Inactiva'}</span></td>
                     <td class="actions">
-                        <button class="btn btn-sm btn-warning" onclick="categoriasManager.editarCategoria(${categoria.id})">Editar</button>
-                        <button class="btn btn-sm btn-danger" onclick="categoriasManager.confirmarEliminacion(${categoria.id})">Eliminar</button>
+                        <button class="btn btn-sm btn-warning" type="button" onclick="categoriasManager.editarCategoria(${categoria.id})">Editar</button>
+                        <button class="btn btn-sm btn-danger" type="button" onclick="categoriasManager.confirmarEliminacion(${categoria.id})">Eliminar</button>
                     </td>
                 `;
                 tablaBody.appendChild(fila);
@@ -133,7 +148,7 @@ class CategoriasManager {
         const pagination = document.getElementById('paginationCategorias');
         if (!pagination) return;
 
-        const totalPages = Math.ceil(totalItems / this.itemsPerPage);
+        const totalPages = Math.max(1, Math.ceil(totalItems / this.itemsPerPage));
         
         if (totalPages <= 1) {
             pagination.innerHTML = '';
@@ -143,7 +158,7 @@ class CategoriasManager {
         let paginationHTML = '';
         
         paginationHTML += `<button class="page-btn ${this.currentPage === 1 ? 'disabled' : ''}" 
-            ${this.currentPage === 1 ? 'disabled' : ''} onclick="categoriasManager.changePage(${this.currentPage - 1})">« Anterior</button>`;
+            ${this.currentPage === 1 ? 'disabled' : ''} onclick="categoriasManager.changePage(${Math.max(1, this.currentPage - 1)})">« Anterior</button>`;
         
         for (let i = 1; i <= totalPages; i++) {
             if (i === 1 || i === totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
@@ -155,12 +170,13 @@ class CategoriasManager {
         }
         
         paginationHTML += `<button class="page-btn ${this.currentPage === totalPages ? 'disabled' : ''}" 
-            ${this.currentPage === totalPages ? 'disabled' : ''} onclick="categoriasManager.changePage(${this.currentPage + 1})">Siguiente »</button>`;
+            ${this.currentPage === totalPages ? 'disabled' : ''} onclick="categoriasManager.changePage(${Math.min(totalPages, this.currentPage + 1)})">Siguiente »</button>`;
         
         pagination.innerHTML = paginationHTML;
     }
 
     changePage(page) {
+        if (!page || page < 1) page = 1;
         this.currentPage = page;
         this.renderCategoriasTable();
     }
@@ -199,7 +215,7 @@ class CategoriasManager {
     async handleSearch(termino) {
         this.currentPage = 1;
         try {
-            const categorias = await this.api.get(`/categorias/?search=${termino}`);
+            const categorias = await this.api.get(`/categorias/?search=${encodeURIComponent(termino)}`);
             this.renderCategoriasTable(categorias);
         } catch (error) {
             console.error('Error searching categories:', error);
@@ -215,18 +231,23 @@ class CategoriasManager {
         const form = document.getElementById('categoriaForm');
         
         if (categoria) {
-            title.textContent = 'Editar Categoría';
+            if (title) title.textContent = 'Editar Categoría';
             this.populateForm(categoria);
         } else {
-            title.textContent = 'Nueva Categoría';
-            form.reset();
-            document.getElementById('descripcionCounter').textContent = '0';
+            if (title) title.textContent = 'Nueva Categoría';
+            form && form.reset();
+            const descCounter = document.getElementById('descripcionCounter');
+            if (descCounter) descCounter.textContent = '0';
         }
         
-        validator.clearFieldErrors(form);
+        if (typeof validator !== 'undefined' && validator.clearFieldErrors) {
+            try { validator.clearFieldErrors(form); } catch(e){}
+        }
         if (modal) modal.classList.add('show');
         
-        validator.setupRealTimeValidation(form);
+        if (typeof validator !== 'undefined' && validator.setupRealTimeValidation) {
+            try { validator.setupRealTimeValidation(form); } catch(e){}
+        }
     }
 
     hideCategoriaForm() {
@@ -237,10 +258,15 @@ class CategoriasManager {
     }
 
     populateForm(categoria) {
-        document.getElementById('nombreCategoria').value = categoria.nombre || '';
-        document.getElementById('descripcionCategoria').value = categoria.descripcion || '';
-        document.getElementById('estadoCategoria').value = categoria.activo ? 'activa' : 'inactiva';
-        document.getElementById('descripcionCounter').textContent = (categoria.descripcion || '').length;
+        const nombreEl = document.getElementById('nombreCategoria');
+        const descEl = document.getElementById('descripcionCategoria');
+        const estadoEl = document.getElementById('estadoCategoria');
+        const descCounter = document.getElementById('descripcionCounter');
+
+        if (nombreEl) nombreEl.value = categoria.nombre || '';
+        if (descEl) descEl.value = categoria.descripcion || '';
+        if (estadoEl) estadoEl.value = categoria.activo ? 'activa' : 'inactiva';
+        if (descCounter) descCounter.textContent = String((categoria.descripcion || '').length);
     }
 
     async handleFormSubmit(e) {
@@ -259,7 +285,9 @@ class CategoriasManager {
 
         const validation = this.validateCategoria(categoriaData);
         if (!validation.isValid) {
-            validator.showFieldErrors(form, validation.errors);
+            if (typeof validator !== 'undefined' && validator.showFieldErrors) {
+                try { validator.showFieldErrors(form, validation.errors); } catch(e){}
+            }
             this.showNotification('Por favor corrige los errores en el formulario', 'error');
             return;
         }
@@ -280,13 +308,13 @@ class CategoriasManager {
                     'success'
                 );
                 this.hideCategoriaForm();
-                this.renderDashboard();
-                this.renderCategoriasTable();
+                await this.renderDashboard();
+                await this.renderCategoriasTable();
             } else {
                 throw new Error('Error al guardar la categoría');
             }
         } catch (error) {
-            this.showNotification('Error al guardar la categoría: ' + error.message, 'error');
+            this.showNotification('Error al guardar la categoría: ' + (error && error.message ? error.message : error), 'error');
         } finally {
             this.setFormLoading(false);
         }
@@ -334,20 +362,88 @@ class CategoriasManager {
                 this.showCategoriaForm(categoria);
             }
         } catch (error) {
-            this.showNotification('Error al cargar la categoría: ' + error.message, 'error');
+            this.showNotification('Error al cargar la categoría: ' + (error && error.message ? error.message : error), 'error');
         }
     }
 
-    confirmarEliminacion(id) {
-        this.showConfirmModal(
-            `¿Está seguro de que desea eliminar esta categoría? Los productos asociados quedarán sin categoría.`,
-            () => this.eliminarCategoria(id)
+    async confirmarEliminacion(id) {
+        // Usar sistema de confirmación global
+        const confirmed = await (window.confirmCriticalAction 
+            ? window.confirmCriticalAction('¿Está seguro de que desea eliminar esta categoría? Los productos asociados quedarán sin categoría.')
+            : confirm('¿Está seguro de que desea eliminar esta categoría?')
         );
+        
+        if (confirmed) {
+            this.eliminarCategoria(id);
+        }
+    }
+
+    // Modal de confirmación reutilizable (implementado para evitar dependencias con otros módulos)
+    showConfirmModal(message = '¿Confirmar acción?', onAccept = () => {}, onCancel = () => {}) {
+        const confirmModal = document.getElementById('modalConfirm');
+        if (!confirmModal) {
+            // fallback a confirm nativo
+            if (confirm(message)) onAccept();
+            else onCancel();
+            return;
+        }
+
+        const confirmMessage = confirmModal.querySelector('#confirmMessage');
+        const btnAccept = confirmModal.querySelector('#btnConfirmAccept');
+        const btnCancel = confirmModal.querySelector('#btnConfirmCancel');
+
+        if (confirmMessage) confirmMessage.textContent = message;
+
+        // mostrar modal centrado usando la clase 'show'
+        confirmModal.classList.add('show');
+        confirmModal.setAttribute('aria-hidden', 'false');
+
+        // limpiar handlers previos
+        try {
+            if (this._confirmHandlers.accept && btnAccept) btnAccept.removeEventListener('click', this._confirmHandlers.accept);
+        } catch(e){}
+        try {
+            if (this._confirmHandlers.cancel && btnCancel) btnCancel.removeEventListener('click', this._confirmHandlers.cancel);
+        } catch(e){}
+
+        // definir nuevos handlers (guardarlos para poder removerlos luego)
+        const acceptHandler = (ev) => {
+            ev && ev.preventDefault && ev.preventDefault();
+            // cerrar y ejecutar
+            this.hideConfirmModal();
+            try { onAccept(); } catch(e){ console.error(e); }
+        };
+        const cancelHandler = (ev) => {
+            ev && ev.preventDefault && ev.preventDefault();
+            this.hideConfirmModal();
+            try { onCancel(); } catch(e){ console.error(e); }
+        };
+
+        // guardar referencias
+        this._confirmHandlers.accept = acceptHandler;
+        this._confirmHandlers.cancel = cancelHandler;
+
+        // ligar listeners
+        if (btnAccept) btnAccept.addEventListener('click', acceptHandler);
+        if (btnCancel) btnCancel.addEventListener('click', cancelHandler);
     }
 
     hideConfirmModal() {
         const modal = document.getElementById('modalConfirm');
         if (modal) modal.classList.remove('show');
+
+        // remover handlers si estaban ligados
+        try {
+            const btnAccept = document.querySelector('#btnConfirmAccept');
+            const btnCancel = document.querySelector('#btnConfirmCancel');
+            if (this._confirmHandlers.accept && btnAccept) btnAccept.removeEventListener('click', this._confirmHandlers.accept);
+            if (this._confirmHandlers.cancel && btnCancel) btnCancel.removeEventListener('click', this._confirmHandlers.cancel);
+        } catch (e) {
+            // ignore
+        }
+
+        this._confirmHandlers.accept = null;
+        this._confirmHandlers.cancel = null;
     }
 
     async eliminarCategoria(id) {
@@ -356,10 +452,10 @@ class CategoriasManager {
         try {
             await this.api.delete(`/categorias/${id}/`);
             this.showNotification('Categoría eliminada correctamente', 'success');
-            this.renderDashboard();
-            this.renderCategoriasTable();
+            await this.renderDashboard();
+            await this.renderCategoriasTable();
         } catch (error) {
-            this.showNotification('Error al eliminar la categoría: ' + error.message, 'error');
+            this.showNotification('Error al eliminar la categoría: ' + (error && error.message ? error.message : error), 'error');
         }
     }
 
@@ -395,8 +491,8 @@ class CategoriasManager {
     }
 
     escapeHtml(unsafe) {
-        if (!unsafe) return '';
-        return unsafe
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")

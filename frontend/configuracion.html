@@ -29,6 +29,7 @@
                         <li><a href="categorias.html">Categorías</a></li>
                         <li><a href="proveedores.html">Proveedores</a></li>
                         <li><a href="usuarios.html">Usuarios</a></li>
+                        <li><a href="reportes.html">Reportes</a></li>
                         <li><a href="configuracion.html" class="active">Configuración</a></li>
                     </ul>
                 </nav>
@@ -162,13 +163,6 @@
 
                     <div class="form-group">
                         <label class="checkbox-label">
-                            <input type="checkbox" id="controlCaducidad" name="controlCaducidad">
-                            Habilitar control de caducidad de productos
-                        </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
                             <input type="checkbox" id="notificacionesAutomaticas" name="notificacionesAutomaticas">
                             Enviar notificaciones automáticas de stock bajo
                         </label>
@@ -199,34 +193,34 @@
                         <small>Email donde se enviarán las alertas y notificaciones</small>
                     </div>
 
+                    <h4 style="margin: 20px 0 15px 0;">Tipos de Notificaciones</h4>
+
                     <div class="form-group">
-                        <h4 style="margin-bottom: 15px;">Tipos de Notificaciones</h4>
-                        <div class="checkbox-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="notifStockBajo" name="notifStockBajo" checked>
-                                Stock bajo
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="notifStockAgotado" name="notifStockAgotado" checked>
-                                Stock agotado
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="notifProductosCaducados" name="notifProductosCaducados">
-                                Productos próximos a caducar
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="notifPedidosPendientes" name="notifPedidosPendientes">
-                                Pedidos pendientes
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="notifReportesAutomaticos" name="notifReportesAutomaticos">
-                                Reportes automáticos
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="notifActividadUsuarios" name="notifActividadUsuarios">
-                                Actividad de usuarios
-                            </label>
-                        </div>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notifStockBajo" name="notifStockBajo" checked>
+                            Notificar cuando el stock esté bajo
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notifStockAgotado" name="notifStockAgotado" checked>
+                            Notificar cuando el stock esté agotado
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notifReportesAutomaticos" name="notifReportesAutomaticos">
+                            Enviar reportes automáticos por email
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notifActividadUsuarios" name="notifActividadUsuarios">
+                            Notificar actividad de usuarios
+                        </label>
                     </div>
 
                     <div class="form-row">
@@ -257,7 +251,7 @@
 
         <!-- CONFIGURACIÓN DE SEGURIDAD -->
         <section style="margin-top: 30px;">
-            <div class="card">
+            <div class="card" data-role="admin">
                 <div class="card-header">
                     <h3>Configuración de Seguridad</h3>
                     <div class="card-icon danger">🔒</div>
@@ -318,16 +312,19 @@
                     <div class="form-group">
                         <h4 style="margin-bottom: 15px;">Copia de Seguridad</h4>
                         <p style="margin-bottom: 15px;">Realice una copia de seguridad de todos los datos del sistema.</p>
-                        <button type="button" class="btn btn-success" id="btnBackup">
-                            <span>💾</span> Generar Copia de Seguridad
+                        <button type="button" class="btn btn-success" id="btnBackup" data-role="admin">
+                            <span>💾</span> Descargar Backup (JSON)
                         </button>
+                        <p class="help-text" style="margin-top:8px;font-size:0.85rem;color:var(--text-secondary);max-width:640px;line-height:1.3;">
+                            El archivo JSON incluye configuración y datos (categorías, proveedores, productos y usuarios básicos). Puedes restaurarlo desde esta misma página usando "Restaurar desde Archivo". Si deseas incluir inventario completo marca la opción avanzada (o usa el comando de consola <code>manage.py restore_from_file --inventario</code> en el servidor). Conserva varios backups externos para mayor seguridad.
+                        </p>
                     </div>
 
                     <div class="form-group" style="margin-top: 20px;">
                         <h4 style="margin-bottom: 15px;">Restaurar Sistema</h4>
                         <p style="margin-bottom: 15px;">Restaurar el sistema desde una copia de seguridad anterior.</p>
-                        <input type="file" id="fileRestore" accept=".json" style="margin-bottom: 10px;">
-                        <button type="button" class="btn btn-warning" id="btnRestore">
+                        <input type="file" id="fileRestore" accept=".json" style="margin-bottom: 10px;" data-role="admin">
+                        <button type="button" class="btn btn-warning" id="btnRestore" data-role="admin">
                             <span>🔄</span> Restaurar desde Archivo
                         </button>
                     </div>
@@ -335,7 +332,7 @@
                     <div class="form-group" style="margin-top: 20px;">
                         <h4 style="margin-bottom: 15px; color: var(--accent);">Zona de Peligro</h4>
                         <p style="margin-bottom: 15px; color: var(--accent);">Estas acciones no se pueden deshacer.</p>
-                        <button type="button" class="btn btn-danger" id="btnResetSystem">
+                        <button type="button" class="btn btn-danger" id="btnResetSystem" data-role="admin">
                             <span>⚠️</span> Restablecer Sistema
                         </button>
                     </div>
@@ -365,10 +362,10 @@
     <script src="js/storage.js"></script>
     <script src="js/loading.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/confirmation.js"></script>
     <script src="js/validation.js"></script>
     <script src="js/auth.js"></script>
-    <script src="js/script.js"></script>
-    <script src="js/app.js"></script>
     <script src="js/configuracion.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

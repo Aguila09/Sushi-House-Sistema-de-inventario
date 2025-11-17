@@ -8,6 +8,14 @@ class ApiClient {
         this._isRefreshing = false;
     }
 
+
+    // Helper: leer cookie por nombre (útil para CSRF en Django)
+    _getCookie(name) {
+        if (typeof document === 'undefined') return null;
+        const v = document.cookie.match('(^|;)\s*' + name + '\s*=\s*([^;]+)');
+        return v ? v.pop() : null;
+    }
+
     // Helper: fetch con timeout (ms)
     _fetchWithTimeout(url, options = {}, timeout = 12000) {
         return new Promise((resolve, reject) => {
@@ -49,6 +57,21 @@ class ApiClient {
 
         try {
             // Usar fetch con timeout para evitar pendientes infinitos
+            /* Attach auth and CSRF headers if available */
+            // Attach Authorization header if token present
+            if (this.token && !config.headers['Authorization']) {
+                config.headers['Authorization'] = `Bearer ${this.token}`;
+            }
+            // Attach CSRF token (Django) if no Authorization header and cookie exists
+            try {
+                const csrftok = this._getCookie('csrftoken');
+                if (csrftok && !config.headers['X-CSRFToken'] && !config.headers['Authorization']) {
+                    config.headers['X-CSRFToken'] = csrftok;
+                }
+            } catch(e) {
+                // ignore if document not available or cookies inaccessible
+            }
+
             const response = await this._fetchWithTimeout(url, config, 12000);
 
             // Manejo de 401 (intento refresh token)

@@ -73,6 +73,61 @@ class StorageManager {
         return this.set('configuracion', configuracion);
     }
 
+    // Helpers para productos/usuarios (compatibilidad con validation.js)
+    //
+    // Compatibilidad: helpers usados por validation.js y otras partes
+    //
+    getProductos() {
+        // intenta leer la lista guardada en localStorage bajo la clave 'productos'
+        const prods = this.get ? this.get('productos') : null;
+        // si no existe el get (por alguna variante), intenta localStorage directo
+        if (prods === null || prods === undefined) {
+            try {
+                const raw = localStorage.getItem('productos');
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+        return Array.isArray(prods) ? prods : [];
+    }
+
+    setProductos(productos = []) {
+        if (!Array.isArray(productos)) productos = [];
+        if (this.set) {
+            this.set('productos', productos);
+            return;
+        }
+        try {
+            localStorage.setItem('productos', JSON.stringify(productos));
+        } catch (e) {}
+    }
+
+    getUsuarios() {
+        const usuarios = this.get ? this.get('usuarios') : null;
+        if (usuarios === null || usuarios === undefined) {
+            try {
+                const raw = localStorage.getItem('usuarios');
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+        return Array.isArray(usuarios) ? usuarios : [];
+    }
+
+    setUsuarios(usuarios = []) {
+        if (!Array.isArray(usuarios)) usuarios = [];
+        if (this.set) {
+            this.set('usuarios', usuarios);
+            return;
+        }
+        try {
+            localStorage.setItem('usuarios', JSON.stringify(usuarios));
+        } catch (e) {}
+    }
+
+
     // Métodos para cache de datos (opcional)
     setCache(key, data, ttl = 300000) { // 5 minutos por defecto
         const cacheData = {

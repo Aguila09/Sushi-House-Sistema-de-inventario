@@ -23,52 +23,70 @@ class ConfiguracionManager {
         document.getElementById('btnRestore')?.addEventListener('click', () => this.restaurarSistema());
         document.getElementById('btnResetSystem')?.addEventListener('click', () => this.confirmarReset());
 
+        // Contador de caracteres
+        document.getElementById('direccionRestaurante')?.addEventListener('input', (e) => {
+            document.getElementById('direccionCounter').textContent = e.target.value.length;
+        });
+
         // Modal de confirmación
         document.getElementById('btnConfirmCancel')?.addEventListener('click', () => this.hideConfirmModal());
         
-        // Character counter for direccion
-        document.getElementById('direccionRestaurante')?.addEventListener('input', (e) => {
-            const counter = document.getElementById('direccionCounter');
-            if (counter) {
-                counter.textContent = e.target.value.length;
+        // Cerrar modal con ESC o click fuera
+        document.getElementById('modalConfirm')?.addEventListener('click', (e) => {
+            if (e.target.id === 'modalConfirm') this.hideConfirmModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('modalConfirm')?.classList.contains('show')) {
+                this.hideConfirmModal();
             }
         });
     }
 
     async loadConfiguracion() {
         try {
-            // Cargar configuración desde la API
-            const configFromAPI = await this.api.get('/configuracion/');
+            // Cargar configuración desde la API (singleton)
+            let configFromAPI = await this.api.get('/configuracion/');
+            
+            // Si es array, tomar el primero (list action del viewset)
+            if (Array.isArray(configFromAPI) && configFromAPI.length > 0) {
+                configFromAPI = configFromAPI[0];
+            }
+            
+            // Usar solo la configuración de la API
+            this.configuracion = configFromAPI || {};
             
             // Cargar categorías para el selector
             await this.loadCategorias();
             
-            // Combinar con configuración local
-            this.configuracion = {
-                ...storage.getConfiguracion(),
-                ...configFromAPI
-            };
-            
             this.populateForms();
         } catch (error) {
             console.error('Error cargando configuración:', error);
-            // Usar configuración local como fallback
-            this.configuracion = storage.getConfiguracion();
-            this.populateForms();
+            this.showNotification('Error al cargar configuración del sistema', 'error');
+            this.configuracion = {};
+        } finally {
+            // Ocultar loading screen
+            if (typeof Loading !== 'undefined') {
+                Loading.hide();
+            } else if (typeof hideLoading !== 'undefined') {
+                hideLoading();
+            }
         }
     }
-    
+
     async loadCategorias() {
         try {
             const categorias = await this.api.get('/categorias/');
-            const selectCategoria = document.getElementById('categoriaPredeterminada');
-            if (selectCategoria && Array.isArray(categorias)) {
-                selectCategoria.innerHTML = '<option value="">Seleccione una categoría</option>';
+            const select = document.getElementById('categoriaPredeterminada');
+            if (select) {
+                // Limpiar opciones excepto la primera
+                select.innerHTML = '<option value="">Seleccione una categoría</option>';
+                
+                // Agregar categorías
                 categorias.forEach(cat => {
                     const option = document.createElement('option');
                     option.value = cat.id;
                     option.textContent = cat.nombre;
-                    selectCategoria.appendChild(option);
+                    select.appendChild(option);
                 });
             }
         } catch (error) {
@@ -77,42 +95,41 @@ class ConfiguracionManager {
     }
 
     populateForms() {
-        // Configuración General
-        document.getElementById('nombreRestaurante').value = this.configuracion.nombreRestaurante || this.configuracion.nombre_restaurante || '';
+        // Configuración General (campos en camelCase desde API)
+        document.getElementById('nombreRestaurante').value = this.configuracion.nombreRestaurante || '';
         document.getElementById('moneda').value = this.configuracion.moneda || 'MXN';
         document.getElementById('iva').value = this.configuracion.iva || 16;
-        document.getElementById('formatoFecha').value = this.configuracion.formatoFecha || this.configuracion.formato_fecha || 'dd/mm/yyyy';
-        document.getElementById('direccionRestaurante').value = this.configuracion.direccionRestaurante || this.configuracion.direccion_restaurante || '';
-        document.getElementById('telefonoRestaurante').value = this.configuracion.telefonoRestaurante || this.configuracion.telefono_restaurante || '';
-        document.getElementById('direccionCounter').textContent = (this.configuracion.direccionRestaurante || this.configuracion.direccion_restaurante || '').length;
+        document.getElementById('formatoFecha').value = this.configuracion.formatoFecha || 'dd/mm/yyyy';
+        document.getElementById('direccionRestaurante').value = this.configuracion.direccionRestaurante || '';
+        document.getElementById('telefonoRestaurante').value = this.configuracion.telefonoRestaurante || '';
+        document.getElementById('direccionCounter').textContent = (this.configuracion.direccionRestaurante || '').length;
 
         // Configuración de Inventario
-        document.getElementById('stockMinimoGlobal').value = this.configuracion.stockMinimoGlobal || this.configuracion.stock_minimo_global || 10;
-        document.getElementById('alertaStockBajo').value = this.configuracion.alertaStockBajo || this.configuracion.alerta_stock_bajo || 'si';
-        document.getElementById('unidadMedida').value = this.configuracion.unidadMedida || this.configuracion.unidad_medida || 'unidades';
-        if (this.configuracion.categoriaPredeterminada || this.configuracion.categoria_predeterminada) {
-            document.getElementById('categoriaPredeterminada').value = this.configuracion.categoriaPredeterminada || this.configuracion.categoria_predeterminada || '';
+        document.getElementById('stockMinimoGlobal').value = this.configuracion.stockMinimoGlobal || 10;
+        document.getElementById('alertaStockBajo').value = this.configuracion.alertaStockBajo ? 'si' : 'no';
+        document.getElementById('unidadMedida').value = this.configuracion.unidadMedida || 'unidades';
+        document.getElementById('notificacionesAutomaticas').checked = this.configuracion.notificacionesAutomaticas || false;
+        
+        // Categoría predeterminada
+        if (this.configuracion.categoriaPredeterminada) {
+            document.getElementById('categoriaPredeterminada').value = this.configuracion.categoriaPredeterminada;
         }
-        document.getElementById('controlCaducidad').checked = this.configuracion.controlCaducidad || this.configuracion.control_caducidad || false;
-        document.getElementById('notificacionesAutomaticas').checked = this.configuracion.notificacionesAutomaticas || this.configuracion.notificaciones_automaticas || false;
 
         // Configuración de Notificaciones
-        document.getElementById('emailNotificaciones').value = this.configuracion.emailNotificaciones || this.configuracion.email_notificaciones || '';
-        document.getElementById('notifStockBajo').checked = this.configuracion.notifStockBajo !== false && this.configuracion.notif_stock_bajo !== false;
-        document.getElementById('notifStockAgotado').checked = this.configuracion.notifStockAgotado !== false && this.configuracion.notif_stock_agotado !== false;
-        document.getElementById('notifProductosCaducados').checked = this.configuracion.notifProductosCaducados || this.configuracion.notif_productos_caducados || false;
-        document.getElementById('notifPedidosPendientes').checked = this.configuracion.notifPedidosPendientes || this.configuracion.notif_pedidos_pendientes || false;
-        document.getElementById('notifReportesAutomaticos').checked = this.configuracion.notifReportesAutomaticos || this.configuracion.notif_reportes_automaticos || false;
-        document.getElementById('notifActividadUsuarios').checked = this.configuracion.notifActividadUsuarios || this.configuracion.notif_actividad_usuarios || false;
-        document.getElementById('frecuenciaReportes').value = this.configuracion.frecuenciaReportes || this.configuracion.frecuencia_reportes || 'semanal';
-        document.getElementById('horaNotificaciones').value = this.configuracion.horaNotificaciones || this.configuracion.hora_notificaciones || '09:00';
+        document.getElementById('emailNotificaciones').value = this.configuracion.emailNotificaciones || '';
+        document.getElementById('notifStockBajo').checked = this.configuracion.notifStockBajo !== false;
+        document.getElementById('notifStockAgotado').checked = this.configuracion.notifStockAgotado !== false;
+        document.getElementById('notifReportesAutomaticos').checked = this.configuracion.notifReportesAutomaticos || false;
+        document.getElementById('notifActividadUsuarios').checked = this.configuracion.notifActividadUsuarios || false;
+        document.getElementById('frecuenciaReportes').value = this.configuracion.frecuenciaReportes || 'semanal';
+        document.getElementById('horaNotificaciones').value = this.configuracion.horaNotificaciones || '09:00';
 
         // Configuración de Seguridad
-        document.getElementById('tiempoSesion').value = this.configuracion.tiempoSesion || this.configuracion.tiempo_sesion || 30;
-        document.getElementById('intentosFallidos').value = this.configuracion.intentosFallidos || this.configuracion.intentos_fallidos || 3;
-        document.getElementById('requerirConfirmacion').checked = this.configuracion.requerirConfirmacion || this.configuracion.requerir_confirmacion || false;
-        document.getElementById('registroActividad').checked = (this.configuracion.registroActividad !== false) && (this.configuracion.registro_actividad !== false);
-        document.getElementById('backupAutomatico').checked = this.configuracion.backupAutomatico || this.configuracion.backup_automatico || false;
+        document.getElementById('tiempoSesion').value = this.configuracion.tiempoSesion || 30;
+        document.getElementById('intentosFallidos').value = this.configuracion.intentosFallidos || 3;
+        document.getElementById('requerirConfirmacion').checked = this.configuracion.requerirConfirmacion || false;
+        document.getElementById('registroActividad').checked = this.configuracion.registroActividad !== false;
+        document.getElementById('backupAutomatico').checked = this.configuracion.backupAutomatico || false;
     }
 
     async handleGeneralSubmit(e) {
@@ -129,12 +146,11 @@ class ConfiguracionManager {
         this.setFormLoading('btnLoadingGeneral', true);
 
         try {
-            // Guardar en API
-            await this.api.post('/configuracion/', configData);
+            // Actualizar en API (PATCH para actualizar singleton)
+            const updated = await this.api.patch('/configuracion/' + (this.configuracion.id || '1') + '/', configData);
             
             // Actualizar configuración local
-            this.configuracion = { ...this.configuracion, ...configData };
-            storage.setConfiguracion(this.configuracion);
+            this.configuracion = { ...this.configuracion, ...updated };
             
             this.showNotification('Configuración general guardada correctamente', 'success');
         } catch (error) {
@@ -151,15 +167,14 @@ class ConfiguracionManager {
         const formData = new FormData(form);
         const configData = Object.fromEntries(formData.entries());
         
-        configData.controlCaducidad = document.getElementById('controlCaducidad').checked;
         configData.notificacionesAutomaticas = document.getElementById('notificacionesAutomaticas').checked;
+        configData.alertaStockBajo = document.getElementById('alertaStockBajo').value === 'si';
 
         this.setFormLoading('btnLoadingInventario', true);
 
         try {
-            await this.api.post('/configuracion/', configData);
-            this.configuracion = { ...this.configuracion, ...configData };
-            storage.setConfiguracion(this.configuracion);
+            const updated = await this.api.patch('/configuracion/' + (this.configuracion.id || '1') + '/', configData);
+            this.configuracion = { ...this.configuracion, ...updated };
             this.showNotification('Configuración de inventario guardada correctamente', 'success');
         } catch (error) {
             this.showNotification('Error al guardar la configuración: ' + error.message, 'error');
@@ -177,8 +192,6 @@ class ConfiguracionManager {
         
         configData.notifStockBajo = document.getElementById('notifStockBajo').checked;
         configData.notifStockAgotado = document.getElementById('notifStockAgotado').checked;
-        configData.notifProductosCaducados = document.getElementById('notifProductosCaducados').checked;
-        configData.notifPedidosPendientes = document.getElementById('notifPedidosPendientes').checked;
         configData.notifReportesAutomaticos = document.getElementById('notifReportesAutomaticos').checked;
         configData.notifActividadUsuarios = document.getElementById('notifActividadUsuarios').checked;
 
@@ -190,9 +203,8 @@ class ConfiguracionManager {
         this.setFormLoading('btnLoadingNotificaciones', true);
 
         try {
-            await this.api.post('/configuracion/', configData);
-            this.configuracion = { ...this.configuracion, ...configData };
-            storage.setConfiguracion(this.configuracion);
+            const updated = await this.api.patch('/configuracion/' + (this.configuracion.id || '1') + '/', configData);
+            this.configuracion = { ...this.configuracion, ...updated };
             this.showNotification('Configuración de notificaciones guardada correctamente', 'success');
         } catch (error) {
             this.showNotification('Error al guardar la configuración: ' + error.message, 'error');
@@ -215,9 +227,8 @@ class ConfiguracionManager {
         this.setFormLoading('btnLoadingSeguridad', true);
 
         try {
-            await this.api.post('/configuracion/', configData);
-            this.configuracion = { ...this.configuracion, ...configData };
-            storage.setConfiguracion(this.configuracion);
+            const updated = await this.api.patch('/configuracion/' + (this.configuracion.id || '1') + '/', configData);
+            this.configuracion = { ...this.configuracion, ...updated };
             this.showNotification('Configuración de seguridad guardada correctamente', 'success');
         } catch (error) {
             this.showNotification('Error al guardar la configuración: ' + error.message, 'error');
@@ -256,23 +267,28 @@ class ConfiguracionManager {
     }
 
     async generarBackup() {
+        const mensaje = 'Este backup descargará un archivo JSON con la configuración, categorías, proveedores, productos y datos básicos de usuarios. Úsalo para restaurar el sistema en caso de pérdida o migración. ¿Deseas continuar?';
         try {
-            const backupData = await this.api.get('/backup/');
-            
-            const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+            const confirmado = await window.confirmCriticalAction(mensaje, true);
+            if (!confirmado) {
+                this.showNotification('Descarga de backup cancelada', 'warning');
+                return;
+            }
+            const data = await this.api.get('/backup/');
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            
+            const ts = new Date();
+            const fecha = ts.toISOString().slice(0,19).replace(/[:T]/g,'-');
             a.href = url;
-            a.download = `backup_sushihouse_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `backup_sushihouse_${fecha}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
-            this.showNotification('Copia de seguridad generada correctamente', 'success');
+            this.showNotification('Backup descargado correctamente', 'success');
         } catch (error) {
-            this.showNotification('Error al generar la copia de seguridad: ' + error.message, 'error');
+            this.showNotification('Error al descargar el backup: ' + error.message, 'error');
         }
     }
 
@@ -323,8 +339,6 @@ class ConfiguracionManager {
     async resetSystem() {
         try {
             await this.api.post('/system/reset/');
-            storage.clear();
-            storage.initializeStorage();
             
             this.showNotification('Sistema restablecido correctamente', 'success');
             setTimeout(() => {
@@ -346,14 +360,17 @@ class ConfiguracionManager {
         btnAccept.parentNode.replaceChild(newBtnAccept, btnAccept);
         
         newBtnAccept.addEventListener('click', () => {
-            this.hideConfirmModal();
             onConfirm();
+            this.hideConfirmModal();
         });
+        
+        document.body.classList.add('modal-open');
         modal.classList.add('show');
     }
 
     hideConfirmModal() {
         const modal = document.getElementById('modalConfirm');
+        document.body.classList.remove('modal-open');
         modal.classList.remove('show');
     }
 

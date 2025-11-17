@@ -3,6 +3,9 @@ class AuthSystem {
     constructor() {
         this.currentUser = null;
         this.api = apiClient;
+        this.sessionTimeout = null;
+        this.inactivityTimer = null;
+        this.sessionDuration = 30; // Por defecto 30 minutos
         this.init();
         
         // Escuchar eventos de refresh de token
@@ -22,6 +25,77 @@ class AuthSystem {
     init() {
         this.checkAuthentication();
         this.bindAuthEvents();
+        this.loadSessionConfig();
+    }
+
+    async loadSessionConfig() {
+        try {
+            // Cargar configuración del sistema para obtener tiempo de sesión
+            const config = await this.api.get('/configuracion/');
+            const configData = Array.isArray(config) ? config[0] : config;
+            
+            if (configData && configData.tiempoSesion) {
+                this.sessionDuration = configData.tiempoSesion;
+                console.log(`Tiempo de sesión configurado: ${this.sessionDuration} minutos`);
+            }
+            
+            // Iniciar monitoreo de inactividad si estamos autenticados
+            const token = localStorage.getItem('authToken');
+            if (token && !window.location.pathname.includes('login.html')) {
+                this.startInactivityMonitoring();
+            }
+        } catch (error) {
+            console.error('Error cargando configuración de sesión:', error);
+            // Usar valor por defecto si hay error
+            this.sessionDuration = 30;
+        }
+    }
+
+    startInactivityMonitoring() {
+        // Limpiar timers existentes
+        this.clearInactivityTimer();
+        
+        // Reiniciar timer
+        this.resetInactivityTimer();
+        
+        // Eventos de actividad del usuario
+        const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+        events.forEach(event => {
+            document.addEventListener(event, () => this.resetInactivityTimer(), { passive: true });
+        });
+    }
+
+    resetInactivityTimer() {
+        this.clearInactivityTimer();
+        
+        // Convertir minutos a milisegundos
+        const timeoutMs = this.sessionDuration * 60 * 1000;
+        
+        this.inactivityTimer = setTimeout(() => {
+            this.handleInactivityTimeout();
+        }, timeoutMs);
+    }
+
+    clearInactivityTimer() {
+        if (this.inactivityTimer) {
+            clearTimeout(this.inactivityTimer);
+            this.inactivityTimer = null;
+        }
+    }
+
+    handleInactivityTimeout() {
+        this.showNotification('Su sesión ha expirado por inactividad', 'warning');
+        
+        // Limpiar datos de sesión
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        this.currentUser = null;
+        
+        // Redirigir a login
+        setTimeout(() => {
+            window.location.replace('login.html');
+        }, 2000);
     }
 
     checkAuthentication() {

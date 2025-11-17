@@ -48,7 +48,7 @@
     <main class="container">
         <div class="page-title">
             <h2>Gestión de Usuarios</h2>
-            <button class="btn btn-primary" id="btnNuevoUsuario">
+            <button class="btn btn-primary" id="btnNuevoUsuario" data-action="nuevo">
                 <span>+</span> Nuevo Usuario
             </button>
         </div>
@@ -101,7 +101,6 @@
                 <h3>Lista de Usuarios</h3>
                 <div class="table-actions">
                     <input type="text" id="searchInputUsuarios" placeholder="Buscar usuarios..." class="search-input">
-                    <button class="btn btn-sm" id="btnExportUsuarios">Exportar</button>
                 </div>
             </div>
             <div class="table-container">
@@ -134,36 +133,97 @@
         </section>
     </main>
 
-    <!-- MODAL FORMULARIO USUARIO (si no existe en tu projecto global, JS necesita estos ids) -->
-    <div id="modalUsuario" class="modal" role="dialog" aria-hidden="true">
+    <!-- MODAL FORMULARIO USUARIO -->
+    <div id="modalUsuario" class="modal" role="dialog" aria-hidden="true" style="display:none;">
         <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalTitleUsuario">Nuevo Usuario</h3>
-                <button class="btn-close" id="btnCloseModalUsuario" aria-label="Cerrar">&times;</button>
+        <div class="modal-header">
+            <h3 id="modalTitleUsuario">Nuevo Usuario</h3>
+            <button class="btn-close" id="btnCloseModalUsuario" aria-label="Cerrar">&times;</button>
+        </div>
+
+        <form id="usuarioForm" class="modal-form" novalidate>
+            <div class="form-row">
+            <div class="form-group">
+                <label for="nombresUsuario">Nombres *</label>
+                <input type="text" id="nombresUsuario" name="nombres" required minlength="1" maxlength="100">
             </div>
-            <form id="usuarioForm" class="modal-form">
-                <!-- (campos ya definidos en tu versión original) -->
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="nombreUsuario">Nombre Completo *</label>
-                        <input type="text" id="nombreUsuario" name="nombre" required maxlength="100">
-                        <span class="error-message" id="errorNombreUsuario"></span>
-                    </div>
-                    <div class="form-group">
-                        <label for="emailUsuario">Email *</label>
-                        <input type="email" id="emailUsuario" name="email" required>
-                        <span class="error-message" id="errorEmailUsuario"></span>
-                    </div>
-                </div>
-                <!-- resto del formulario... -->
-                <div class="form-actions">
-                    <button type="button" class="btn" id="btnCancelarUsuario">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="btnSubmitUsuario">
-                        <span class="btn-loading" id="btnLoadingUsuario" style="display: none;"></span>
-                        <span id="btnTextUsuario">Guardar Usuario</span>
-                    </button>
-                </div>
-            </form>
+            <div class="form-group">
+                <label for="apellidosUsuario">Apellidos *</label>
+                <input type="text" id="apellidosUsuario" name="apellidos" required minlength="1" maxlength="100">
+            </div>
+            </div>
+
+            <div class="form-row">
+            <div class="form-group">
+                <label for="usuarioUsuario">Usuario *</label>
+                <input type="text" id="usuarioUsuario" name="usuario" required minlength="3" maxlength="50" placeholder="usuario.unico">
+            </div>
+            </div>
+
+            <div class="form-row">
+            <div class="form-group">
+                <label for="emailUsuario">Email *</label>
+                <input type="email" id="emailUsuario" name="email" required maxlength="254">
+            </div>
+            <div class="form-group">
+                <label for="telefonoUsuario">Teléfono</label>
+                <input type="tel" id="telefonoUsuario" name="telefono" maxlength="20" placeholder="Opcional">
+            </div>
+            </div>
+
+            <div class="form-row">
+            <div class="form-group" id="rolGroup">
+                <label for="rolUsuario">Rol *</label>
+                <select id="rolUsuario" name="rol" required>
+                <!-- Las opciones se llenan dinámicamente desde JS según permisos -->
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="estadoUsuario">Estado</label>
+                <select id="estadoUsuario" name="activo">
+                <option value="1">Activo</option>
+                <option value="0">Inactivo</option>
+                </select>
+            </div>
+            </div>
+
+            <!-- contraseñas: si quieres pedir contraseña al crear, añade aquí -->
+            <div id="contrasenaFields" class="form-row" style="display:grid;">
+            <div class="form-group">
+                <label for="contrasenaUsuario">Contraseña *</label>
+                <input type="password" id="contrasenaUsuario" name="password" minlength="8">
+            </div>
+            <div class="form-group">
+                <label for="confirmarContrasena">Confirmar Contraseña *</label>
+                <input type="password" id="confirmarContrasena" name="password_confirm" minlength="8">
+            </div>
+            </div>
+
+            <div class="form-actions">
+            <button type="button" class="btn" id="btnCancelarUsuario">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btnSubmitUsuario">
+                <span id="btnLoadingUsuario" class="btn-loading" style="display:none"></span>
+                <span id="btnTextUsuario">Guardar Usuario</span>
+            </button>
+            </div>
+        </form>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMACIÓN (unificado con el resto) -->
+    <div id="modalConfirm" class="modal" role="dialog" aria-hidden="true">
+        <div class="modal-content confirm-modal">
+            <div class="modal-header">
+                <h3>Confirmar acción</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">¿Está seguro de que desea realizar esta acción?</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" id="btnConfirmCancel">Cancelar</button>
+                <button class="btn btn-danger" id="btnConfirmAccept">Aceptar</button>
+            </div>
         </div>
     </div>
 
@@ -171,6 +231,7 @@
     <script src="js/loading.js"></script>
     <script src="js/api.js"></script>
     <script src="js/validation.js"></script>
+    <script src="js/confirmation.js"></script>
     <script src="js/auth.js"></script>
 
     <script src="js/script.js"></script>

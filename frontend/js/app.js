@@ -1,164 +1,210 @@
-// --- app.js (versión robusta con reintentos) ---
+// app.js - ApiClient (versión segura, evita redeclaraciones y mejora manejo de 401)
+(function(){
 
-/**
- * waitForAuth: espera a que AuthSystem o window.auth estén disponibles.
- * waitForAppClass: espera a que SushiHouseApp (clase) o window.app existan.
- *
- * Hacemos reintentos controlados en lugar de fallar inmediatamente,
- * para cubrir casos de live-reload, orden de carga variable o re-evaluaciones.
- */
+  // si ya existe, no redeclaramos
+  if (window.ApiClient) {
+    console.info('ApiClient ya está definido en window — se mantiene la instancia existente.');
+    if (!window.apiClient) {
+      try { window.apiClient = new window.ApiClient(); } catch(e){ console.warn('No fue posible crear una instancia nueva de ApiClient existente:', e); }
+    }
+    return;
+  }
 
-function waitForAuth({ timeout = 6000, interval = 50 } = {}) {
-    return new Promise((resolve, reject) => {
-        const start = Date.now();
-        const check = () => {
-            const okAuth = (typeof window.AuthSystem === 'function') || !!window.auth;
-            if (okAuth) return resolve();
-            if (Date.now() - start >= timeout) return reject(new Error('Timeout esperando AuthSystem'));
-            setTimeout(check, interval);
-        };
-        check();
-    });
-}
-
-function waitForAppClass({ timeout = 6000, interval = 50 } = {}) {
-    return new Promise((resolve, reject) => {
-        const start = Date.now();
-        const check = () => {
-            // consideramos la clase disponible si:
-            // - existe la clase global SushiHouseApp (typeof === 'function')
-            // - o ya existe una instancia window.app
-            const okAppClass = (typeof window.SushiHouseApp === 'function') || !!window.app;
-            if (okAppClass) return resolve();
-            if (Date.now() - start >= timeout) return reject(new Error('Timeout esperando SushiHouseApp'));
-            setTimeout(check, interval);
-        };
-        check();
-    });
-}
-
-// Intento de inicialización con tres capas:
-// 1) esperar auth y clase/app (reintentos)
-// 2) intentar inicializar (si ya hay instancia, usarla)
-// 3) si falla la creación por NameError, reintentar algunas veces
-async function tryInitialize({ maxAttempts = 8, attemptInterval = 200 } = {}) {
-    // Primero, asegurarnos de que auth está listo
-    try {
-        await waitForAuth({ timeout: 6000, interval: 60 });
-    } catch (e) {
-        console.warn('waitForAuth falló:', e);
-        // Permitimos seguir aun si no hay auth, puede ser una página pública
+  class ApiClient {
+    constructor(opts = {}) {
+      this.baseURL = opts.baseURL || 'http://localhost:8000/api';
+      this.token = localStorage.getItem('authToken') || null;
+      this._lastUnauthorizedAt = 0;
+      this._isRefreshing = false;
+      this._defaultTimeout = opts.timeout || 12000;
     }
 
-    // Ahora esperar la clase o la instancia
-    try {
-        await waitForAppClass({ timeout: 6000, interval: 60 });
-    } catch (e) {
-        console.warn('waitForAppClass: la clase/instancia no apareció en el tiempo esperado:', e);
-        // Intentaremos igualmente, con reintentos manuales
+    _getCookie(name) {
+      if (typeof document === 'undefined') return null;
+      const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+      return m ? m.pop() : null;
     }
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            console.log(`Inicialización: intento ${attempt}/${maxAttempts}...`);
+    _fetchWithTimeout(url, options = {}, timeout = this._defaultTimeout) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('Request timeout'));
+        }, timeout);
 
-            // Si ya hay instancia, la reutilizamos
-            if (window.app) {
-                console.log('Ya existe window.app -> usando instancia existente');
-                // Verificar listeners y devolverla
-                if (typeof window.app.verifyEventListeners === 'function') {
-                    try { window.app.verifyEventListeners(); } catch (e) { console.warn(e); }
-                }
-                return window.app;
-            }
-
-            // Si la clase está disponible, crear nueva instancia
-            if (typeof window.SushiHouseApp === 'function') {
-                console.log('SushiHouseApp encontrada como clase -> creando instancia');
-                window.app = new window.SushiHouseApp();
-                if (typeof window.app.verifyEventListeners === 'function') {
-                    try { window.app.verifyEventListeners(); } catch (e) { console.warn(e); }
-                }
-                return window.app;
-            }
-
-            // Si la clase no está, intentar acceder al identificador global (por si fue declarada sin window)
-            if (typeof SushiHouseApp === 'function') {
-                console.log('SushiHouseApp encontrada (no en window) -> creando instancia y exponiendo en window');
-                window.SushiHouseApp = SushiHouseApp;
-                window.app = new window.SushiHouseApp();
-                if (typeof window.app.verifyEventListeners === 'function') {
-                    try { window.app.verifyEventListeners(); } catch (e) { console.warn(e); }
-                }
-                return window.app;
-            }
-
-            // Si llegamos aquí, no existe la clase aún. Esperar y reintentar.
-            console.log('SushiHouseApp no encontrada todavía, esperando antes del próximo intento...');
-            await new Promise(r => setTimeout(r, attemptInterval));
-        } catch (err) {
-            // Si en algún intento lanza un ReferenceError o similar, lo atrapamos y reintentamos
-            console.warn('Error creando instancia (se reintentará):', err);
-            await new Promise(r => setTimeout(r, attemptInterval));
-        }
-    }
-
-    // Si fallaron todos los intentos, informar (pero no romper la UI)
-    console.error('No se pudo inicializar SushiHouseApp después de varios intentos.');
-    // Mostrar aviso visible opcional para el usuario
-    try {
-        const warnId = '__app_init_warn';
-        if (!document.getElementById(warnId)) {
-            const warn = document.createElement('div');
-            warn.id = warnId;
-            warn.style.cssText = 'position:fixed;top:10px;left:10px;padding:12px;background:#ffd;z-index:9999;border:1px solid #cc9;border-radius:6px;';
-            warn.textContent = 'No fue posible iniciar la aplicación (SushiHouseApp no cargó). Revisa la consola.';
-            document.body.appendChild(warn);
-        }
-    } catch (e) {
-        /* ignore dom errors */
-    }
-    return null;
-}
-
-// Inicialización pública (mantener API anterior)
-window.initializeSushiHouseApp = async () => {
-    console.log('Inicializando aplicación (robusta)...');
-
-    try {
-        const appInstance = await tryInitialize();
-        if (appInstance) {
-            console.log('Inicialización completada (app lista)');
-            return appInstance;
-        } else {
-            throw new Error('Inicialización incompleta: no se dispone de appInstance');
-        }
-    } catch (error) {
-        console.error('Error durante la inicialización:', error);
-        throw error;
-    }
-};
-
-// Arranque al DOMContentLoaded: detecta si estamos en páginas relevantes y lanza init
-document.addEventListener('DOMContentLoaded', () => {
-    const pathname = window.location.pathname || '';
-    const isDashboardPage = pathname.includes('index.html') ||
-        !!document.getElementById('tablaProductos') ||
-        !!document.querySelector('.dashboard');
-
-    if (isDashboardPage) {
-        console.log('Página del dashboard detectada, se intentará inicializar la app...');
-        // No bloquear: llamamos a initializeSushiHouseApp que reintentará si hace falta
-        window.initializeSushiHouseApp().catch(err => {
-            console.error('initializeSushiHouseApp falló al iniciar automáticamente:', err);
+        fetch(url, options).then(res => {
+          clearTimeout(timer);
+          resolve(res);
+        }).catch(err => {
+          clearTimeout(timer);
+          reject(err);
         });
+      });
     }
-});
 
-// Reintento adicional si auth se vuelve listo más tarde
-window.addEventListener('authReady', () => {
-    console.log('Evento authReady recibido — intento de inicialización en background');
-    window.initializeSushiHouseApp().catch(err => {
-        console.warn('Inicialización post-authReady fallida (se ignorará):', err);
-    });
-});
+    _unwrapPaginated(json) {
+      if (!json) return json;
+      if (Array.isArray(json)) return json;
+      if (Object.prototype.hasOwnProperty.call(json, 'results')) return json.results;
+      return json;
+    }
+
+    handleUnauthorized() {
+      console.warn('ApiClient.handleUnauthorized: limpiando tokens locales.');
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      // No forzamos redirección aquí; la UI debería detectar y mostrar login.
+    }
+
+    async _attemptRefresh(refreshToken) {
+      if (!refreshToken) return false;
+      if (this._isRefreshing) {
+        // si ya está refrescando, esperar un pequeño lapso y leer token nuevo
+        await new Promise(r => setTimeout(r, 500));
+        this.token = localStorage.getItem('authToken');
+        return !!this.token;
+      }
+      this._isRefreshing = true;
+      try {
+        const resp = await this._fetchWithTimeout(`${this.baseURL}/token/refresh/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: refreshToken })
+        }, this._defaultTimeout);
+
+        if (!resp.ok) {
+          console.warn('Refresh token request no OK:', resp.status);
+          this._isRefreshing = false;
+          return false;
+        }
+        const data = await resp.json().catch(()=>null);
+        if (data && data.access) {
+          localStorage.setItem('authToken', data.access);
+          this.token = data.access;
+          window.dispatchEvent(new Event('tokenRefreshed'));
+          this._isRefreshing = false;
+          return true;
+        }
+        this._isRefreshing = false;
+        return false;
+      } catch (e) {
+        console.error('Error intentando refresh token:', e);
+        this._isRefreshing = false;
+        return false;
+      }
+    }
+
+    async request(endpoint, options = {}) {
+      const method = (options.method || 'GET').toUpperCase();
+      console.log(`API Request: ${method} ${endpoint}`);
+
+      const url = `${this.baseURL}${endpoint}`;
+
+      const headers = Object.assign({
+        'Content-Type': 'application/json'
+      }, options.headers || {});
+
+      // refrescar token localmente
+      this.token = localStorage.getItem('authToken') || this.token;
+
+      if (this.token && !headers['Authorization']) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+        console.log('Token incluido en la solicitud');
+      }
+
+      // si no hay Authorization, intentar CSRF cookie (para django forms)
+      try {
+        const csrftok = this._getCookie('csrftoken');
+        if (csrftok && !headers['X-CSRFToken'] && !headers['Authorization']) {
+          headers['X-CSRFToken'] = csrftok;
+        }
+      } catch(e){ /* ignore */ }
+
+      const config = Object.assign({}, options, { headers });
+
+      try {
+        const response = await this._fetchWithTimeout(url, config, this._defaultTimeout);
+
+        // Manejo 401: intentar refresh token y reintentar una vez
+        if (response.status === 401) {
+          console.warn('Respuesta 401 recibida para', endpoint);
+          const now = Date.now();
+          if (now - this._lastUnauthorizedAt < 2000) {
+            // throttling: evitar loops
+            throw new Error('Unauthorized (throttled)');
+          }
+
+          const refreshToken = localStorage.getItem('refreshToken');
+          const refreshed = await this._attemptRefresh(refreshToken);
+          if (refreshed) {
+            // reintentar la request original con nuevo token
+            const newToken = localStorage.getItem('authToken');
+            if (newToken) {
+              config.headers = Object.assign({}, config.headers, { Authorization: `Bearer ${newToken}` });
+            }
+            const retry = await this._fetchWithTimeout(url, config, this._defaultTimeout);
+            if (!retry.ok) {
+              const text = await retry.text().catch(()=>null);
+              throw new Error(text || `HTTP error ${retry.status}`);
+            }
+            const ct = (retry.headers && retry.headers.get) ? (retry.headers.get('content-type') || '') : '';
+            if (ct.includes('application/json')) {
+              const json = await retry.json().catch(()=>null);
+              return this._unwrapPaginated(json);
+            } else {
+              return await retry.text();
+            }
+          } else {
+            this._lastUnauthorizedAt = Date.now();
+            this.handleUnauthorized();
+            // Rechazamos la promesa para que el front lo maneje
+            throw new Error('Unauthorized - token invalid or refresh failed');
+          }
+        }
+
+        if (!response.ok) {
+          const bodyText = await response.text().catch(()=>null);
+          console.error(`API request failed: ${method} ${url} -> ${response.status}`, bodyText);
+          throw new Error(bodyText || `HTTP error! status: ${response.status}`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const json = await response.json().catch(()=>null);
+          return this._unwrapPaginated(json);
+        } else {
+          return await response.text();
+        }
+      } catch (err) {
+        console.error(`Request to ${url} failed:`, err);
+        // Siempre rechazar para que el caller pueda .catch() y actuar (mostrar login, mensaje, etc.)
+        throw err;
+      }
+    }
+
+    async get(endpoint) {
+      return this.request(endpoint, { method: 'GET' });
+    }
+    async post(endpoint, data) {
+      return this.request(endpoint, { method: 'POST', body: JSON.stringify(data) });
+    }
+    async put(endpoint, data) {
+      return this.request(endpoint, { method: 'PUT', body: JSON.stringify(data) });
+    }
+    async delete(endpoint) {
+      return this.request(endpoint, { method: 'DELETE' });
+    }
+  }
+
+  // Exponer en window sin redeclarar
+  window.ApiClient = ApiClient;
+  if (!window.apiClient) {
+    try {
+      window.apiClient = new ApiClient();
+    } catch(e){
+      console.error('No fue posible instanciar apiClient automáticamente:', e);
+    }
+  }
+
+  console.log('api.js cargado — ApiClient y apiClient expuestos en window.');
+
+})();
