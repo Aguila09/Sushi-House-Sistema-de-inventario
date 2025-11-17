@@ -27,9 +27,14 @@ body {
     line-height: 1.6;
 }
 
+/* Evita scroll del body cuando hay un modal abierto */
+body.modal-open {
+    overflow: hidden;
+}
+
 .container {
     width: 90%;
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 0 15px;
 }
@@ -477,6 +482,11 @@ tr:hover {
     align-items: center;
 }
 
+.modal .modal-dialog { 
+    max-width: 720px;
+    width: 100%; 
+}
+
 .modal-content {
     background: white;
     border-radius: 8px;
@@ -616,6 +626,7 @@ tr:hover {
     border-radius: 50%;
     animation: spin 1s linear infinite;
     display: inline-block;
+    vertical-align: middle;
 }
 
 /* RESPONSIVE */
@@ -758,6 +769,21 @@ tr:hover {
 .config-form {
     padding: 20px;
 }
+
+.field-error {
+    border-color: var(--error) !important;
+    box-shadow: 0 0 0 3px rgba(231,76,60,0.05);
+}
+
+.field-error-msg {
+    color: var(--error);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.status.in-stock { background-color: #e8f5e9; color: #2e7d32; }
+.status.out-of-stock { background-color: #ffebee; color: #c62828; }
+
 
 @media (max-width: 768px) {
     .checkbox-group {

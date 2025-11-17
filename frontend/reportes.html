@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reportes - Sushi House</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/loading.css">
 </head>
 <body>
     <!-- HEADER -->
@@ -23,6 +24,7 @@
                         <li><a href="proveedores.html">Proveedores</a></li>
                         <li><a href="usuarios.html">Usuarios</a></li>
                         <li><a href="reportes.html" class="active">Reportes</a></li>
+                        <li><a href="configuracion.html">Configuración</a></li>
                     </ul>
                 </nav>
                 <div class="user-menu">
@@ -39,20 +41,37 @@
     <main class="container">
         <div class="page-title">
             <h2>Reportes del Sistema</h2>
-            <button class="btn btn-primary">
-                <span>📊</span> Generar Reporte
-            </button>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="btn btn-primary" id="btnGenerarReporte">
+                    <span>🔄</span> Actualizar Datos
+                </button>
+                <button class="btn btn-outline" id="btnExportReporte">
+                    <span>⬇️</span> Exportar CSV
+                </button>
+            </div>
         </div>
+
+        <!-- NOTIFICACIONES -->
+        <div id="notifications" class="notifications-container"></div>
 
         <!-- REPORTES -->
         <section class="dashboard">
             <div class="card">
                 <div class="card-header">
-                    <h3>Productos más Vendidos</h3>
-                    <div class="card-icon primary">📈</div>
+                    <h3>Productos Agotados</h3>
+                    <div class="card-icon danger">❌</div>
                 </div>
-                <div class="card-value">24</div>
-                <div class="card-title">Filete de Res (este mes)</div>
+                <div class="card-value" id="reporteAgotados">0</div>
+                <div class="card-title">Sin stock actualmente</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Stock Bajo</h3>
+                    <div class="card-icon warning">⚠️</div>
+                </div>
+                <div class="card-value" id="reporteStockBajo">0</div>
+                <div class="card-title">Por debajo del mínimo</div>
             </div>
 
             <div class="card">
@@ -60,42 +79,35 @@
                     <h3>Valor Total Inventario</h3>
                     <div class="card-icon success">💰</div>
                 </div>
-                <div class="card-value">$12,458</div>
+                <div class="card-value" id="valorTotalInventario">$0</div>
                 <div class="card-title">Valor actual en stock</div>
             </div>
 
             <div class="card">
                 <div class="card-header">
-                    <h3>Rotación de Stock</h3>
-                    <div class="card-icon warning">🔄</div>
+                    <h3>Categorías Activas</h3>
+                    <div class="card-icon success">🏷️</div>
                 </div>
-                <div class="card-value">78%</div>
-                <div class="card-title">Promedio mensual</div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h3>Productos Vencidos</h3>
-                    <div class="card-icon danger">⏰</div>
-                </div>
-                <div class="card-value">2</div>
-                <div class="card-title">Próximos a vencer</div>
+                <div class="card-value" id="categoriasActivas">0</div>
+                <div class="card-title">Total de categorías</div>
             </div>
         </section>
 
-        <!-- GRÁFICOS (simulados) -->
+        <!-- GRÁFICOS FUNCIONALES -->
         <section style="margin-top: 30px;">
-            <h3 style="margin-bottom: 15px;">Estadísticas de Ventas</h3>
-            <div class="card" style="text-align: center; padding: 40px;">
-                <h3>Gráfico de Ventas por Categoría</h3>
-                <p style="margin: 20px 0; color: var(--gray);">
-                    [Aquí iría un gráfico interactivo mostrando las ventas por categoría]
-                </p>
-                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
-                    <div style="background-color: var(--secondary); width: 100px; height: 200px; border-radius: 5px;"></div>
-                    <div style="background-color: var(--success); width: 100px; height: 150px; border-radius: 5px;"></div>
-                    <div style="background-color: var(--warning); width: 100px; height: 180px; border-radius: 5px;"></div>
-                    <div style="background-color: var(--accent); width: 100px; height: 120px; border-radius: 5px;"></div>
+            <h3 style="margin-bottom: 15px;">Gráficos de Inventario</h3>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+                <div class="card" style="padding: 20px; width: 100%; max-width: 800px;">
+                    <h3 style="text-align: center; margin-bottom: 15px;">Stock por Categoría</h3>
+                    <div style="position: relative; height: 350px; width: 100%;">
+                        <canvas id="chartStockPorCategoria"></canvas>
+                    </div>
+                </div>
+                <div class="card" style="padding: 20px; width: 100%; max-width: 800px;">
+                    <h3 style="text-align: center; margin-bottom: 15px;">Estado de Stock</h3>
+                    <div style="position: relative; height: 350px; width: 100%;">
+                        <canvas id="chartEstadoStock"></canvas>
+                    </div>
                 </div>
             </div>
         </section>
@@ -103,8 +115,14 @@
 
     <!-- scripts -->
     <script src="js/storage.js"></script>
+    <script src="js/loading.js"></script>
+    <script src="js/api.js"></script>
     <script src="js/validation.js"></script>
     <script src="js/auth.js"></script>
-    <script src="js/script.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/reportes.js"></script>
 </body>
 </html>

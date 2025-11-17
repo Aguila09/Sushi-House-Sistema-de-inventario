@@ -1,4 +1,6 @@
-// Sistema de gestión de proveedores
+// frontend/js/proveedores.js
+// ProveedoresManager - versión robusta y compatible con backends inconsistentes
+
 class ProveedoresManager {
     constructor() {
         this.currentPage = 1;
@@ -6,6 +8,11 @@ class ProveedoresManager {
         this.currentSort = { field: 'nombre', direction: 'asc' };
         this.currentProveedorId = null;
         this.isEditing = false;
+        this.api = (typeof apiClient !== 'undefined') ? apiClient : { get: async ()=>[], post: async ()=>true, put: async ()=>true, delete: async ()=>true };
+
+        // Bindings
+        this._tableClickHandler = this._tableClickHandler.bind(this);
+
         this.init();
     }
 
@@ -17,703 +24,663 @@ class ProveedoresManager {
 
     bindEvents() {
         // Botones principales
-        document.getElementById('btnNuevoProveedor')?.addEventListener('click', () => this.showProveedorForm());
-        document.getElementById('btnCancelarProveedor')?.addEventListener('click', () => this.hideProveedorForm());
-        document.getElementById('btnCloseModalProveedor')?.addEventListener('click', () => this.hideProveedorForm());
-        document.getElementById('btnExportProveedores')?.addEventListener('click', () => this.exportData());
-        document.getElementById('btnCerrarDetalles')?.addEventListener('click', () => this.hideDetallesModal());
+        const btnNuevo = document.getElementById('btnNuevoProveedor');
+        if (btnNuevo) btnNuevo.addEventListener('click', () => this.showProveedorForm());
 
-        // Formulario
-        document.getElementById('proveedorForm')?.addEventListener('submit', (e) => this.handleFormSubmit(e));
+        const btnCancelar = document.getElementById('btnCancelarProveedor');
+        if (btnCancelar) btnCancelar.addEventListener('click', () => this.hideProveedorForm());
 
-        // Modal de confirmación
-        document.getElementById('btnConfirmCancel')?.addEventListener('click', () => this.hideConfirmModal());
-        
-        // Cerrar modales al hacer clic fuera
+        const btnClose = document.getElementById('btnCloseModalProveedor');
+        if (btnClose) btnClose.addEventListener('click', () => this.hideProveedorForm());
+
+        // Cerrar modal detalles con método consistente
+        const btnCerrarDetalles = document.getElementById('btnCerrarDetalles');
+        if (btnCerrarDetalles) btnCerrarDetalles.addEventListener('click', (e) => { e.preventDefault(); this.hideDetallesModal(); });
+
+        // Form
+        const form = document.getElementById('proveedorForm');
+        if (form) form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        // Modal confirm
+        const btnConfirmCancel = document.getElementById('btnConfirmCancel');
+        if (btnConfirmCancel) btnConfirmCancel.addEventListener('click', () => this.hideConfirmModal());
+
+        // Click en overlay para cerrar modales (delegado)
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) {
-                this.hideProveedorForm();
-                this.hideDetallesModal();
-                this.hideConfirmModal();
+            if (e.target && e.target.classList && e.target.classList.contains('modal')) {
+                const modalProv = document.getElementById('modalProveedor');
+                if (modalProv) modalProv.classList.remove('show');
+
+                const modalDet = document.getElementById('modalDetallesProveedor');
+                if (modalDet) modalDet.classList.remove('show');
+
+                const modalConfirm = document.getElementById('modalConfirm');
+                if (modalConfirm) modalConfirm.classList.remove('show');
             }
         });
 
-        // Ordenamiento de tabla
+        // Ordenamiento columnas
         document.querySelectorAll('th[data-sort]').forEach(th => {
             th.addEventListener('click', () => this.handleSort(th.dataset.sort));
         });
+
+        // Delegación para tabla (botones dinámicos)
+        const tabla = document.getElementById('tablaProveedores') || document.getElementById('tablaProveedoresTable') || document.querySelector('.table-container');
+        if (tabla) {
+            tabla.removeEventListener('click', this._tableClickHandler);
+            tabla.addEventListener('click', this._tableClickHandler);
+        }
+
+        // Enlace de inputs específicos para restricción en tiempo real
+        this.attachInputGuards();
     }
 
-    loadInitialData() {
-        this.showLoading();
-        
-        // Simular carga de datos
-        setTimeout(() => {
-            this.renderDashboard();
-            this.renderProveedoresTable();
-            this.populateCategoriasSelect();
-            this.hideLoading();
-        }, 1000);
-    }
+    attachInputGuards() {
+        // Teléfono: permitir sólo dígitos y signos comunes (+ - ( ) espacio)
+        const telefono = document.getElementById('telefonoProveedor');
+        if (telefono) {
+            telefono.addEventListener('keypress', (e) => {
+                const char = String.fromCharCode(e.which || e.keyCode);
+                if (!/[0-9+\-() ]/.test(char) && !e.metaKey && !e.ctrlKey) {
+                    e.preventDefault();
+                }
+            });
+            telefono.addEventListener('input', (e) => {
+                const v = e.target.value;
+                const cleaned = v.replace(/[^\d+\-\(\)\s]/g, '');
+                if (cleaned !== v) e.target.value = cleaned;
+            });
+            telefono.addEventListener('blur', () => {
+                const digits = (telefono.value || '').replace(/\D/g, '');
+                if (digits.length < 7) {
+                    this.setFieldError(telefono, 'El teléfono debe contener al menos 7 dígitos.');
+                } else {
+                    this.clearFieldError(telefono);
+                }
+            });
+        }
 
-    showLoading() {
-        const loadingScreen = document.getElementById('loadingScreen');
-        if (loadingScreen) {
-            loadingScreen.style.display = 'flex';
+        // Email
+        const email = document.getElementById('emailProveedor');
+        if (email) {
+            email.addEventListener('blur', () => {
+                if (email.value && !this.isValidEmail(email.value)) {
+                    this.setFieldError(email, 'Introduce un correo electrónico válido (ejemplo@dominio.com).');
+                } else {
+                    this.clearFieldError(email);
+                }
+            });
+            email.addEventListener('input', () => {
+                if (email.value.includes(' ')) email.value = email.value.replace(/\s/g, '');
+            });
+        }
+
+        // Nombre y contacto
+        const nombre = document.getElementById('nombreProveedor');
+        if (nombre) {
+            nombre.addEventListener('blur', () => {
+                if (!nombre.value || nombre.value.trim().length < 2) {
+                    this.setFieldError(nombre, 'El nombre es requerido (mínimo 2 caracteres).');
+                } else {
+                    this.clearFieldError(nombre);
+                }
+            });
+        }
+        const contacto = document.getElementById('contactoProveedor');
+        if (contacto) {
+            contacto.addEventListener('blur', () => {
+                if (!contacto.value || contacto.value.trim().length < 2) {
+                    this.setFieldError(contacto, 'El contacto es requerido (mínimo 2 caracteres).');
+                } else {
+                    this.clearFieldError(contacto);
+                }
+            });
+        }
+
+        // Dirección: longitud mínima
+        const direccion = document.getElementById('direccionProveedor');
+        if (direccion) {
+            direccion.addEventListener('blur', () => {
+                if (direccion.value && direccion.value.length < 5) {
+                    this.setFieldError(direccion, 'Si especificas dirección, debe tener al menos 5 caracteres.');
+                } else {
+                    this.clearFieldError(direccion);
+                }
+            });
         }
     }
 
-    hideLoading() {
-        const loadingScreen = document.getElementById('loadingScreen');
-        if (loadingScreen) {
-            loadingScreen.classList.add('fade-out');
-            setTimeout(() => {
-                loadingScreen.style.display = 'none';
-                loadingScreen.classList.remove('fade-out');
-            }, 500);
-        }
-    }
-
-    showTableLoading() {
-        const tableLoading = document.getElementById('tableLoadingProveedores');
-        if (tableLoading) {
-            tableLoading.style.display = 'flex';
-        }
-    }
-
-    hideTableLoading() {
-        const tableLoading = document.getElementById('tableLoadingProveedores');
-        if (tableLoading) {
-            tableLoading.style.display = 'none';
-        }
-    }
-
-    renderDashboard() {
-        const proveedores = storage.getProveedores();
-        const productos = storage.getProductos();
-        
-        const totalProveedores = proveedores.length;
-        const totalProductosProveedores = productos.length;
-        
-        // Calcular proveedores destacados (con más productos)
-        const proveedoresConProductos = {};
-        productos.forEach(producto => {
-            if (producto.proveedor) {
-                proveedoresConProductos[producto.proveedor] = (proveedoresConProductos[producto.proveedor] || 0) + 1;
+    // Helpers de UI para errores en campos
+    setFieldError(inputEl, message) {
+        if (!inputEl) return;
+        inputEl.classList.add('field-error');
+        try { inputEl.setAttribute('aria-invalid', 'true'); } catch(e){}
+        try {
+            if (typeof inputEl.setCustomValidity === 'function') {
+                inputEl.setCustomValidity(message);
+                inputEl.reportValidity();
             }
-        });
-        
-        const proveedoresDestacados = Object.keys(proveedoresConProductos).length;
-        const pedidosPendientes = 0; // Esto vendría de un sistema de pedidos
-
-        document.getElementById('totalProveedores').textContent = totalProveedores;
-        document.getElementById('totalProductosProveedores').textContent = totalProductosProveedores;
-        document.getElementById('proveedoresDestacados').textContent = proveedoresDestacados;
-        document.getElementById('pedidosPendientes').textContent = pedidosPendientes;
+        } catch (e) {}
+        let wrapper = inputEl.parentElement || inputEl;
+        let msg = wrapper.querySelector('.field-error-msg');
+        if (!msg) {
+            msg = document.createElement('div');
+            msg.className = 'field-error-msg';
+            wrapper.appendChild(msg);
+        }
+        msg.textContent = message;
     }
 
-    renderProveedoresTable(proveedores = null) {
-        this.showTableLoading();
-        
-        setTimeout(() => {
+    clearFieldError(inputEl) {
+        if (!inputEl) return;
+        inputEl.classList.remove('field-error');
+        try { inputEl.removeAttribute('aria-invalid'); } catch(e){}
+        try {
+            if (typeof inputEl.setCustomValidity === 'function') inputEl.setCustomValidity('');
+        } catch (e) {}
+        const wrapper = inputEl.parentElement;
+        if (wrapper) {
+            const msg = wrapper.querySelector('.field-error-msg');
+            if (msg) msg.remove();
+        }
+    }
+
+    clearFieldErrors(formElement) {
+        if (!formElement) return;
+        const inputs = formElement.querySelectorAll('input, textarea, select');
+        inputs.forEach(i => this.clearFieldError(i));
+    }
+
+    showFieldErrors(formElement, errors = {}) {
+        if (!formElement) return;
+        Object.keys(errors).forEach(key => {
+            const msg = errors[key];
+            if (key === '_general') {
+                if (msg) this.showNotification(msg, 'error');
+                return;
+            }
+            const input = formElement.querySelector(`[name="${key}"], #${key}`);
+            if (input) this.setFieldError(input, msg);
+            else this.showNotification(`${key}: ${msg}`, 'error');
+        });
+    }
+
+    async loadInitialData() {
+        const loading = document.getElementById('loadingScreen');
+        if (loading) loading.style.display = 'flex';
+        try {
+            await Promise.allSettled([
+                this.renderDashboard(),
+                this.renderProveedoresTable(),
+                this.populateCategoriasSelect()
+            ]);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            if (loading) {
+                loading.classList.add('fade-out');
+                setTimeout(()=> { loading.style.display = 'none'; loading.classList.remove('fade-out'); }, 300);
+            }
+        }
+    }
+
+    async renderDashboard() {
+        try {
+            const proveedores = await this.api.get('/proveedores/').catch(()=>[]);
+            const productos = await this.api.get('/productos/').catch(()=>[]);
+            const totalProveedores = Array.isArray(proveedores) ? proveedores.length : (proveedores && proveedores.count ? proveedores.count : 0);
+            const totalProductos = Array.isArray(productos) ? productos.length : (productos && productos.count ? productos.count : 0);
+
+            const elTotal = document.getElementById('totalProveedores');
+            if (elTotal) elTotal.textContent = String(totalProveedores);
+            const elProductos = document.getElementById('totalProductosProveedores');
+            if (elProductos) elProductos.textContent = String(totalProductos);
+        } catch (e) {
+            console.error('Error renderizando dashboard proveedores:', e);
+        }
+    }
+
+    // Normaliza estado soportando varias formas (activo/estado/1/0/true/false/'1'/'0')
+    normalizeEstado(obj) {
+        // obj puede ser proveedor o valor
+        let activoVal;
+        if (obj && typeof obj === 'object') {
+            if (typeof obj.activo !== 'undefined') activoVal = obj.activo;
+            else if (typeof obj.estado !== 'undefined') activoVal = obj.estado;
+            else activoVal = null;
+        } else {
+            activoVal = obj;
+        }
+
+        // Normalizar
+        const isTruthy = (v) => v === true || v === 1 || v === '1' || v === 'true' || v === 'activo' || v === 'Activo' || v === 'activo';
+        const activo = isTruthy(activoVal);
+        return {
+            activo,
+            texto: activo ? 'Activo' : 'Inactivo',
+            clase: activo ? 'in-stock' : 'out-of-stock',
+            raw: activoVal
+        };
+    }
+
+    async renderProveedoresTable(proveedores = null) {
+        const tableLoading = document.getElementById('tableLoadingProveedores');
+        if (tableLoading) tableLoading.style.display = 'flex';
+        try {
+            const proveedoresList = proveedores || await this.api.get('/proveedores/').catch(()=>[]);
             const tablaBody = document.getElementById('tablaProveedores');
             const tableEmpty = document.getElementById('tableEmptyProveedores');
-            
-            if (!tablaBody) return;
-
-            const proveedoresToRender = proveedores || storage.getProveedores();
-            const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-            const endIndex = startIndex + this.itemsPerPage;
-            const paginatedProveedores = proveedoresToRender.slice(startIndex, endIndex);
-
-            tablaBody.innerHTML = '';
-
-            if (paginatedProveedores.length === 0) {
-                tableEmpty.style.display = 'block';
-                this.renderPagination(0);
-                this.hideTableLoading();
+            if (!tablaBody) {
+                console.warn('tablaProveedores no encontrada en DOM.');
                 return;
             }
 
-            tableEmpty.style.display = 'none';
+            const list = Array.isArray(proveedoresList) ? proveedoresList : (proveedoresList && proveedoresList.results ? proveedoresList.results : []);
+            tablaBody.innerHTML = '';
+            if (!list || list.length === 0) {
+                if (tableEmpty) tableEmpty.style.display = 'block';
+                return;
+            } else if (tableEmpty) tableEmpty.style.display = 'none';
 
-            paginatedProveedores.forEach(proveedor => {
-                const productosCount = this.getProductosCountByProveedor(proveedor.id);
-                const estado = proveedor.estado || 'activo';
-                
-                const fila = document.createElement('tr');
-                fila.innerHTML = `
-                    <td>
-                        <strong>${this.escapeHtml(proveedor.nombre)}</strong>
-                    </td>
-                    <td>${this.escapeHtml(proveedor.contacto)}</td>
-                    <td>${proveedor.telefono}</td>
-                    <td>${proveedor.email}</td>
+            for (const p of list) {
+                const productosCount = await this.getProductosCountByProveedor(p.id).catch(()=>0);
+                const estadoNorm = this.normalizeEstado(p);
+                const tr = document.createElement('tr');
+                tr.setAttribute('data-id', p.id);
+                tr.innerHTML = `
+                    <td><strong>${this.escapeHtml(p.nombre)}</strong></td>
+                    <td>${this.escapeHtml(p.contacto || '')}</td>
+                    <td>${this.escapeHtml(p.telefono || '')}</td>
+                    <td>${this.escapeHtml(p.email || '')}</td>
                     <td>${productosCount}</td>
-                    <td><span class="status ${estado === 'activo' ? 'in-stock' : 'out-of-stock'}">${estado === 'activo' ? 'Activo' : 'Inactivo'}</span></td>
+                    <td><span class="status ${estadoNorm.clase}">${estadoNorm.texto}</span></td>
                     <td class="actions">
-                        <button class="btn btn-sm btn-primary" onclick="proveedoresManager.verDetalles(${proveedor.id})">Ver</button>
-                        <button class="btn btn-sm btn-warning" onclick="proveedoresManager.editarProveedor(${proveedor.id})">Editar</button>
-                        <button class="btn btn-sm btn-danger" onclick="proveedoresManager.confirmarEliminacion(${proveedor.id})">Eliminar</button>
+                        <button class="btn btn-sm btn-primary" data-action="ver" data-id="${p.id}">Ver</button>
+                        <button class="btn btn-sm btn-warning" data-action="editar" data-id="${p.id}">Editar</button>
+                        <button class="btn btn-sm btn-danger" data-action="eliminar" data-id="${p.id}">Eliminar</button>
                     </td>
                 `;
-                tablaBody.appendChild(fila);
-            });
-
-            this.renderPagination(proveedoresToRender.length);
-            this.hideTableLoading();
-        }, 500);
-    }
-
-    getProductosCountByProveedor(proveedorId) {
-        const productos = storage.getProductos();
-        return productos.filter(p => p.proveedor == proveedorId).length;
-    }
-
-    renderPagination(totalItems) {
-        const pagination = document.getElementById('paginationProveedores');
-        if (!pagination) return;
-
-        const totalPages = Math.ceil(totalItems / this.itemsPerPage);
-        
-        if (totalPages <= 1) {
-            pagination.innerHTML = '';
-            return;
-        }
-
-        let paginationHTML = '';
-        
-        // Botón anterior
-        paginationHTML += `<button class="page-btn ${this.currentPage === 1 ? 'disabled' : ''}" 
-            ${this.currentPage === 1 ? 'disabled' : ''} onclick="proveedoresManager.changePage(${this.currentPage - 1})">« Anterior</button>`;
-        
-        // Páginas
-        for (let i = 1; i <= totalPages; i++) {
-            if (i === 1 || i === totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
-                paginationHTML += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" 
-                    onclick="proveedoresManager.changePage(${i})">${i}</button>`;
-            } else if (i === this.currentPage - 3 || i === this.currentPage + 3) {
-                paginationHTML += '<span class="page-dots">...</span>';
+                tablaBody.appendChild(tr);
             }
+        } catch (e) {
+            console.error('Error renderizando tabla proveedores:', e);
+            this.showNotification('Error cargando proveedores', 'error');
+        } finally {
+            if (tableLoading) tableLoading.style.display = 'none';
         }
-        
-        // Botón siguiente
-        paginationHTML += `<button class="page-btn ${this.currentPage === totalPages ? 'disabled' : ''}" 
-            ${this.currentPage === totalPages ? 'disabled' : ''} onclick="proveedoresManager.changePage(${this.currentPage + 1})">Siguiente »</button>`;
-        
-        pagination.innerHTML = paginationHTML;
     }
 
-    changePage(page) {
-        const totalPages = Math.ceil(storage.getProveedores().length / this.itemsPerPage);
-        if (page < 1 || page > totalPages) return;
-        
-        this.currentPage = page;
-        this.renderProveedoresTable();
+    async getProductosCountByProveedor(proveedorId) {
+        try {
+            const productos = await this.api.get(`/productos/?proveedor=${proveedorId}`);
+            return Array.isArray(productos) ? productos.length : (productos && productos.count ? productos.count : 0);
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    _tableClickHandler(ev) {
+        const btn = ev.target.closest('button, [data-action]');
+        if (!btn) return;
+        const id = btn.dataset?.id || btn.closest('tr')?.dataset?.id;
+        const action = btn.dataset?.action || null;
+        if (!id || !action) return;
+
+        if (action === 'ver') this.verDetalles(id);
+        else if (action === 'editar' || action === 'edit') this.editarProveedor(id);
+        else if (action === 'eliminar' || action === 'delete') this.confirmarEliminacion(id);
     }
 
     handleSort(field) {
-        if (this.currentSort.field === field) {
-            this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
-        } else {
-            this.currentSort.field = field;
-            this.currentSort.direction = 'asc';
-        }
-
-        const proveedores = storage.getProveedores();
-        const sortedProveedores = this.sortProveedores(proveedores, this.currentSort.field, this.currentSort.direction);
-        this.renderProveedoresTable(sortedProveedores);
-        
-        // Actualizar indicador visual en el header
-        document.querySelectorAll('th[data-sort]').forEach(th => {
-            th.innerHTML = th.innerHTML.replace(' ↗', '').replace(' ↘', '');
-            if (th.dataset.sort === field) {
-                th.innerHTML += this.currentSort.direction === 'asc' ? ' ↗' : ' ↘';
-            }
-        });
-    }
-
-    sortProveedores(proveedores, field, direction) {
-        return [...proveedores].sort((a, b) => {
-            let aValue = a[field];
-            let bValue = b[field];
-            
-            if (typeof aValue === 'string') {
-                aValue = aValue.toLowerCase();
-                bValue = bValue.toLowerCase();
-            }
-            
-            if (aValue < bValue) return direction === 'asc' ? -1 : 1;
-            if (aValue > bValue) return direction === 'asc' ? 1 : -1;
-            return 0;
-        });
+        if (this.currentSort.field === field) this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
+        else { this.currentSort.field = field; this.currentSort.direction = 'asc'; }
+        this.renderProveedoresTable();
     }
 
     setupRealTimeSearch() {
-        const searchInput = document.getElementById('searchInputProveedores');
-        if (searchInput) {
-            let searchTimeout;
-            searchInput.addEventListener('input', (e) => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    this.handleSearch(e.target.value);
-                }, 300);
-            });
-        }
-    }
-
-    handleSearch(termino) {
-        this.currentPage = 1;
-        const proveedores = storage.getProveedores();
-        const proveedoresFiltrados = proveedores.filter(proveedor => 
-            proveedor.nombre.toLowerCase().includes(termino.toLowerCase()) ||
-            proveedor.contacto.toLowerCase().includes(termino.toLowerCase()) ||
-            proveedor.email.toLowerCase().includes(termino.toLowerCase()) ||
-            proveedor.telefono.includes(termino)
-        );
-        this.renderProveedoresTable(proveedoresFiltrados);
-    }
-
-    populateCategoriasSelect() {
-        const select = document.getElementById('categoriasProveedor');
-        if (!select) return;
-
-        const categorias = storage.getCategorias();
-        select.innerHTML = '';
-        
-        categorias.forEach(categoria => {
-            const option = document.createElement('option');
-            option.value = categoria.id;
-            option.textContent = categoria.nombre;
-            select.appendChild(option);
+        const input = document.getElementById('searchInputProveedores');
+        if (!input) return;
+        let to = null;
+        input.addEventListener('input', (e) => {
+            if (to) clearTimeout(to);
+            to = setTimeout(() => this.handleSearch(e.target.value), 300);
         });
     }
 
-    showProveedorForm(proveedor = null) {
+    async handleSearch(termino) {
+        this.currentPage = 1;
+        try {
+            if (!termino || termino.trim() === '') {
+                await this.renderProveedoresTable();
+                return;
+            }
+            const res = await this.api.get(`/proveedores/?search=${encodeURIComponent(termino)}`);
+            await this.renderProveedoresTable(res);
+        } catch (e) {
+            console.error('Error searching proveedores:', e);
+        }
+    }
+
+    async populateCategoriasSelect() {
+        const select = document.getElementById('categoriasProveedor');
+        if (!select) return;
+        try {
+            const categorias = await this.api.get('/categorias/').catch(()=>[]);
+            select.innerHTML = '';
+            (Array.isArray(categorias) ? categorias : []).forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = c.nombre;
+                select.appendChild(option);
+            });
+        } catch (e) {
+            console.error('Error cargando categorías para proveedores:', e);
+        }
+    }
+
+    async showProveedorForm(proveedor = null) {
         this.isEditing = !!proveedor;
         this.currentProveedorId = proveedor ? proveedor.id : null;
-        
+
         const modal = document.getElementById('modalProveedor');
         const title = document.getElementById('modalTitleProveedor');
         const form = document.getElementById('proveedorForm');
-        
-        if (proveedor) {
-            title.textContent = 'Editar Proveedor';
-            this.populateForm(proveedor);
-        } else {
-            title.textContent = 'Nuevo Proveedor';
+
+        if (title) title.textContent = proveedor ? 'Editar Proveedor' : 'Nuevo Proveedor';
+        if (form) {
             form.reset();
-            document.getElementById('direccionCounter').textContent = '0';
-            document.getElementById('notasCounter').textContent = '0';
+            this.clearFieldErrors(form);
         }
-        
-        validator.clearFieldErrors(form);
-        modal.classList.add('show');
-        
-        // Configurar validación en tiempo real
-        validator.setupRealTimeValidation(form);
+
+        // llenar si es edición
+        if (proveedor && form) {
+            form.querySelector('#nombreProveedor') && (form.querySelector('#nombreProveedor').value = proveedor.nombre || '');
+            form.querySelector('#contactoProveedor') && (form.querySelector('#contactoProveedor').value = proveedor.contacto || '');
+            form.querySelector('#telefonoProveedor') && (form.querySelector('#telefonoProveedor').value = proveedor.telefono || '');
+            form.querySelector('#emailProveedor') && (form.querySelector('#emailProveedor').value = proveedor.email || '');
+            form.querySelector('#direccionProveedor') && (form.querySelector('#direccionProveedor').value = proveedor.direccion || '');
+
+            // estado: preferencia activo -> estado
+            const estadoEl = form.querySelector('#estadoProveedor');
+            if (estadoEl) {
+                const norm = this.normalizeEstado(proveedor);
+                estadoEl.value = norm.activo ? 'activo' : 'inactivo';
+            }
+
+            // categorias (si backend envía arreglo de ids)
+            const categoriasSelect = form.querySelector('#categoriasProveedor');
+            if (categoriasSelect && proveedor.categorias && Array.isArray(proveedor.categorias)) {
+                Array.from(categoriasSelect.options).forEach(opt => {
+                    opt.selected = proveedor.categorias.includes(Number(opt.value));
+                });
+            }
+        } else if (form) {
+            // nuevo proveedor por defecto activo
+            const estadoEl = form.querySelector('#estadoProveedor');
+            if (estadoEl) estadoEl.value = 'activo';
+        }
+
+        if (modal) modal.classList.add('show');
     }
 
     hideProveedorForm() {
         const modal = document.getElementById('modalProveedor');
-        modal.classList.remove('show');
+        if (modal) modal.classList.remove('show');
         this.isEditing = false;
         this.currentProveedorId = null;
     }
 
     populateForm(proveedor) {
-        document.getElementById('nombreProveedor').value = proveedor.nombre || '';
-        document.getElementById('contactoProveedor').value = proveedor.contacto || '';
-        document.getElementById('telefonoProveedor').value = proveedor.telefono || '';
-        document.getElementById('emailProveedor').value = proveedor.email || '';
-        document.getElementById('direccionProveedor').value = proveedor.direccion || '';
-        document.getElementById('estadoProveedor').value = proveedor.estado || 'activo';
-        document.getElementById('notasProveedor').value = proveedor.notas || '';
-        
-        document.getElementById('direccionCounter').textContent = (proveedor.direccion || '').length;
-        document.getElementById('notasCounter').textContent = (proveedor.notas || '').length;
-        
-        // Seleccionar categorías
-        if (proveedor.categorias) {
-            const categoriasSelect = document.getElementById('categoriasProveedor');
-            Array.from(categoriasSelect.options).forEach(option => {
-                option.selected = proveedor.categorias.includes(option.value);
-            });
-        }
+        this.showProveedorForm(proveedor);
     }
 
-    async handleFormSubmit(e) {
-        e.preventDefault();
-        
-        const form = e.target;
-        const formData = new FormData(form);
-        const proveedorData = Object.fromEntries(formData.entries());
-        
-        // Procesar categorías múltiples
-        const categoriasSelect = document.getElementById('categoriasProveedor');
-        proveedorData.categorias = Array.from(categoriasSelect.selectedOptions).map(option => option.value);
-        
-        if (this.isEditing) {
-            proveedorData.id = this.currentProveedorId;
-        }
-
-        // Validar
-        const validation = this.validateProveedor(proveedorData);
-        if (!validation.isValid) {
-            validator.showFieldErrors(form, validation.errors);
-            this.showNotification('Por favor corrige los errores en el formulario', 'error');
-            return;
-        }
-
-        // Mostrar loading en el botón
-        this.setFormLoading(true);
-
-        try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            let resultado;
-            if (this.isEditing) {
-                resultado = this.actualizarProveedor(this.currentProveedorId, proveedorData);
-            } else {
-                resultado = this.agregarProveedor(proveedorData);
-            }
-
-            if (resultado) {
-                this.showNotification(
-                    `Proveedor ${this.isEditing ? 'actualizado' : 'agregado'} correctamente`,
-                    'success'
-                );
-                this.hideProveedorForm();
-                this.renderDashboard();
-                this.renderProveedoresTable();
-            } else {
-                throw new Error('Error al guardar el proveedor');
-            }
-        } catch (error) {
-            this.showNotification('Error al guardar el proveedor: ' + error.message, 'error');
-        } finally {
-            this.setFormLoading(false);
-        }
-    }
-
-    validateProveedor(proveedor) {
+    validateProveedorData(data) {
         const errors = {};
         let isValid = true;
 
-        // Validación básica de campos requeridos
-        if (!proveedor.nombre || proveedor.nombre.trim() === '') {
-            errors.nombre = 'El nombre del proveedor es requerido';
+        if (!data.nombre || typeof data.nombre !== 'string' || data.nombre.trim().length < 2) {
+            errors.nombre = 'El nombre del proveedor es requerido (mínimo 2 caracteres).';
             isValid = false;
         }
 
-        if (!proveedor.contacto || proveedor.contacto.trim() === '') {
-            errors.contacto = 'El contacto es requerido';
+        if (!data.contacto || typeof data.contacto !== 'string' || data.contacto.trim().length < 2) {
+            errors.contacto = 'El nombre de contacto es requerido (mínimo 2 caracteres).';
             isValid = false;
         }
 
-        if (!proveedor.telefono || proveedor.telefono.trim() === '') {
-            errors.telefono = 'El teléfono es requerido';
+        if (!data.telefono || (String(data.telefono).replace(/\D/g, '').length < 7)) {
+            errors.telefono = 'Teléfono inválido: debe contener al menos 7 dígitos.';
+            isValid = false;
+        } else {
+            const digits = String(data.telefono).replace(/\D/g, '');
+            if (digits.length > 15) {
+                errors.telefono = 'Teléfono demasiado largo (max 15 dígitos).';
+                isValid = false;
+            }
+        }
+
+        if (!data.email || !this.isValidEmail(data.email)) {
+            errors.email = 'Correo inválido. Usa el formato ejemplo@dominio.com.';
             isValid = false;
         }
 
-        if (!proveedor.email || proveedor.email.trim() === '') {
-            errors.email = 'El email es requerido';
-            isValid = false;
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(proveedor.email)) {
-            errors.email = 'Por favor ingrese un email válido';
-            isValid = false;
-        }
-
-        // Validación de nombre único
-        const proveedores = storage.getProveedores();
-        const nombreExiste = proveedores.some(p => 
-            p.nombre.toLowerCase() === proveedor.nombre.toLowerCase() && 
-            p.id !== (proveedor.id || null)
-        );
-
-        if (nombreExiste) {
-            errors.nombre = 'Ya existe un proveedor con este nombre';
+        if (data.direccion && data.direccion.trim() !== '' && data.direccion.trim().length < 5) {
+            errors.direccion = 'Si indicas dirección, debe tener al menos 5 caracteres.';
             isValid = false;
         }
 
         return { isValid, errors };
     }
 
-    setFormLoading(loading) {
-        const btnSubmit = document.getElementById('btnSubmitProveedor');
-        const btnLoading = document.getElementById('btnLoadingProveedor');
-        const btnText = document.getElementById('btnTextProveedor');
-        
-        if (loading) {
-            btnSubmit.disabled = true;
-            btnLoading.style.display = 'inline-block';
-            btnText.textContent = this.isEditing ? 'Actualizando...' : 'Guardando...';
+    isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).toLowerCase());
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        if (!form) return;
+        this.clearFieldErrors(form);
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Capturar categorías multiple correctamente
+        const categoriasSelect = form.querySelector('#categoriasProveedor');
+        if (categoriasSelect) {
+            data.categorias = Array.from(categoriasSelect.selectedOptions).map(o => {
+                const v = o.value;
+                return v === '' ? null : (isNaN(Number(v)) ? v : Number(v));
+            });
         } else {
-            btnSubmit.disabled = false;
-            btnLoading.style.display = 'none';
-            btnText.textContent = this.isEditing ? 'Actualizar Proveedor' : 'Guardar Proveedor';
+            data.categorias = [];
+        }
+
+        data.nombre = (data.nombre || '').trim();
+        data.contacto = (data.contacto || '').trim();
+        data.telefono = (data.telefono || '').trim();
+        data.email = (data.email || '').trim();
+        data.direccion = (data.direccion || '').trim();
+        data.estado = data.estado || 'activo';
+
+        // Mapear estado a activo boolean para backend y mantener estado string
+        const activo = (data.estado === 'activo' || data.estado === '1' || data.estado === 'true' || data.activo === true || data.activo === '1');
+        data.activo = activo;
+        data.estado = activo ? 'activo' : 'inactivo';
+
+        // Validar
+        const validation = this.validateProveedorData(data);
+        if (!validation.isValid) {
+            this.showFieldErrors(form, validation.errors);
+            this.showNotification('Por favor corrige los errores en el formulario', 'error');
+            return;
+        }
+
+        // Envío
+        this.setFormLoading(true);
+        try {
+            let result;
+            if (this.isEditing && this.currentProveedorId) {
+                result = await this.api.put(`/proveedores/${this.currentProveedorId}/`, data);
+            } else {
+                result = await this.api.post('/proveedores/', data);
+            }
+
+            if (!result) throw new Error('Respuesta vacía del servidor');
+
+            this.showNotification(this.isEditing ? 'Proveedor actualizado correctamente' : 'Proveedor agregado correctamente', 'success');
+            this.hideProveedorForm();
+            await this.renderDashboard();
+            await this.renderProveedoresTable();
+        } catch (err) {
+            console.error('Error guardando proveedor:', err);
+            const msg = (err && err.message) ? err.message : 'Error al guardar el proveedor';
+            this.showNotification('❌ ' + msg, 'error');
+        } finally {
+            this.setFormLoading(false);
         }
     }
 
-    agregarProveedor(proveedorData) {
-        const proveedores = storage.getProveedores();
-        const nuevoId = proveedores.length > 0 ? Math.max(...proveedores.map(p => p.id)) + 1 : 1;
-        
-        const nuevoProveedor = {
-            id: nuevoId,
-            ...proveedorData,
-            fechaCreacion: new Date().toISOString()
-        };
-        
-        proveedores.push(nuevoProveedor);
-        return storage.setProveedores(proveedores) ? nuevoProveedor : null;
-    }
+    setFormLoading(loading) {
+        const btn = document.getElementById('btnSubmitProveedor');
+        const spinner = document.getElementById('btnLoadingProveedor');
+        const txt = document.getElementById('btnTextProveedor');
 
-    actualizarProveedor(id, datosActualizados) {
-        const proveedores = storage.getProveedores();
-        const index = proveedores.findIndex(p => p.id === id);
-        if (index !== -1) {
-            proveedores[index] = { 
-                ...proveedores[index], 
-                ...datosActualizados, 
-                fechaActualizacion: new Date().toISOString() 
-            };
-            return storage.setProveedores(proveedores);
+        if (loading) {
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.style.display = 'inline-block';
+            if (txt) txt.textContent = this.isEditing ? 'Actualizando...' : 'Guardando...';
+        } else {
+            if (btn) btn.disabled = false;
+            if (spinner) spinner.style.display = 'none';
+            if (txt) txt.textContent = this.isEditing ? 'Actualizar Proveedor' : 'Guardar Proveedor';
         }
-        return false;
     }
 
-    editarProveedor(id) {
-        const proveedores = storage.getProveedores();
-        const proveedor = proveedores.find(p => p.id === id);
-        if (proveedor) {
+    async editarProveedor(id) {
+        try {
+            const proveedor = await this.api.get(`/proveedores/${id}/`);
+            if (!proveedor) throw new Error('No se encontró el proveedor');
             this.showProveedorForm(proveedor);
+        } catch (e) {
+            console.error('Error cargando proveedor:', e);
+            this.showNotification('❌ Error cargando proveedor: ' + (e.message || e), 'error');
         }
     }
 
-    verDetalles(id) {
-        const proveedores = storage.getProveedores();
-        const proveedor = proveedores.find(p => p.id === id);
-        const productos = storage.getProductos();
-        const productosProveedor = productos.filter(p => p.proveedor == id);
-        
-        if (!proveedor) return;
+    async verDetalles(id) {
+        try {
+            const [proveedor, productos] = await Promise.all([
+                this.api.get(`/proveedores/${id}/`),
+                this.api.get(`/productos/?proveedor=${id}`)
+            ]);
+            if (!proveedor) throw new Error('Proveedor no encontrado');
 
-        const modal = document.getElementById('modalDetallesProveedor');
-        const title = document.getElementById('modalTitleDetalles');
-        const content = document.getElementById('detallesProveedorContent');
-        
-        title.textContent = `Detalles: ${proveedor.nombre}`;
-        
-        content.innerHTML = `
-            <div class="detalles-grid">
-                <div class="detalle-item">
-                    <label>Nombre:</label>
-                    <span>${this.escapeHtml(proveedor.nombre)}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Contacto:</label>
-                    <span>${this.escapeHtml(proveedor.contacto)}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Teléfono:</label>
-                    <span>${proveedor.telefono}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Email:</label>
-                    <span>${proveedor.email}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Dirección:</label>
-                    <span>${proveedor.direccion || 'No especificada'}</span>
-                </div>
-                <div class="detalle-item">
-                    <label>Estado:</label>
-                    <span class="status ${proveedor.estado === 'activo' ? 'in-stock' : 'out-of-stock'}">${proveedor.estado === 'activo' ? 'Activo' : 'Inactivo'}</span>
-                </div>
-                <div class="detalle-item full-width">
-                    <label>Notas:</label>
-                    <span>${proveedor.notas || 'No hay notas adicionales'}</span>
-                </div>
-            </div>
-            
-            <div class="productos-proveedor" style="margin-top: 20px;">
-                <h4>Productos suministrados (${productosProveedor.length})</h4>
-                ${productosProveedor.length > 0 ? `
-                    <ul>
-                        ${productosProveedor.map(p => `<li>${this.escapeHtml(p.nombre)} - Stock: ${p.stock}</li>`).join('')}
-                    </ul>
-                ` : '<p>Este proveedor no tiene productos asociados.</p>'}
-            </div>
-        `;
-        
-        modal.classList.add('show');
+            const modal = document.getElementById('modalDetallesProveedor');
+            const title = document.getElementById('modalTitleDetalles');
+            const content = document.getElementById('detallesProveedorContent');
+
+            const estadoNorm = this.normalizeEstado(proveedor);
+
+            if (title) title.textContent = `Detalles: ${proveedor.nombre}`;
+            if (content) {
+                content.innerHTML = `
+                    <div class="detalles-grid">
+                        <div class="detalle-item"><label>Nombre:</label><span>${this.escapeHtml(proveedor.nombre)}</span></div>
+                        <div class="detalle-item"><label>Contacto:</label><span>${this.escapeHtml(proveedor.contacto || '')}</span></div>
+                        <div class="detalle-item"><label>Teléfono:</label><span>${this.escapeHtml(proveedor.telefono || '')}</span></div>
+                        <div class="detalle-item"><label>Email:</label><span>${this.escapeHtml(proveedor.email || '')}</span></div>
+                        <div class="detalle-item"><label>Dirección:</label><span>${this.escapeHtml(proveedor.direccion || 'No especificada')}</span></div>
+                        <div class="detalle-item"><label>Estado:</label><span class="status ${estadoNorm.clase}">${estadoNorm.texto}</span></div>
+                    </div>
+                    <div style="margin-top:16px;">
+                        <h4>Productos (${Array.isArray(productos)?productos.length:0})</h4>
+                        ${Array.isArray(productos) && productos.length ? `<ul>${productos.map(p => `<li>${this.escapeHtml(p.nombre)} - Stock: ${p.stock ?? 0}</li>`).join('')}</ul>` : '<p>No hay productos asociados.</p>'}
+                    </div>
+                `;
+            }
+
+            if (modal) modal.classList.add('show');
+        } catch (e) {
+            console.error('Error cargando detalles:', e);
+            this.showNotification('❌ Error cargando detalles del proveedor: ' + (e.message || e), 'error');
+        }
     }
 
     hideDetallesModal() {
         const modal = document.getElementById('modalDetallesProveedor');
-        modal.classList.remove('show');
+        if (modal) modal.classList.remove('show');
     }
 
-    confirmarEliminacion(id) {
-        const proveedores = storage.getProveedores();
-        const proveedor = proveedores.find(p => p.id === id);
-        const productos = storage.getProductos();
-        const productosAsociados = productos.filter(p => p.proveedor == id);
+    async confirmarEliminacion(id) {
+        // Usar sistema de confirmación global
+        const confirmed = await (window.confirmCriticalAction 
+            ? window.confirmCriticalAction('¿Está seguro de que desea eliminar este proveedor? Esta acción no se puede deshacer.')
+            : confirm('¿Está seguro de que desea eliminar este proveedor?')
+        );
         
-        if (!proveedor) return;
-
-        const modal = document.getElementById('modalConfirm');
-        const message = document.getElementById('confirmMessage');
-        const btnAccept = document.getElementById('btnConfirmAccept');
-        
-        let mensaje = `¿Está seguro de que desea eliminar el proveedor "${proveedor.nombre}"?`;
-        
-        if (productosAsociados.length > 0) {
-            mensaje += `\n\nADVERTENCIA: Este proveedor tiene ${productosAsociados.length} producto(s) asociado(s). Al eliminar el proveedor, estos productos quedarán sin proveedor asignado.`;
+        if (confirmed) {
+            try {
+                await this.eliminarProveedor(id);
+            } catch (e) {
+                console.error(e);
+            }
         }
-        
-        message.textContent = mensaje;
-        
-        // Remover event listeners previos
-        const newBtnAccept = btnAccept.cloneNode(true);
-        btnAccept.parentNode.replaceChild(newBtnAccept, btnAccept);
-        
-        newBtnAccept.addEventListener('click', () => this.eliminarProveedor(id));
-        modal.classList.add('show');
+    }
+            } finally {
+                const cm = document.getElementById('modalConfirm');
+                if (cm) cm.classList.remove('show');
+            }
+        });
     }
 
     hideConfirmModal() {
         const modal = document.getElementById('modalConfirm');
-        modal.classList.remove('show');
+        if (modal) modal.classList.remove('show');
     }
 
     async eliminarProveedor(id) {
-        this.hideConfirmModal();
-        
         try {
-            // Simular delay de red
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            const resultado = this.eliminarProveedorStorage(id);
-            
-            if (resultado) {
-                this.showNotification('Proveedor eliminado correctamente', 'success');
-                this.renderDashboard();
-                this.renderProveedoresTable();
-            } else {
-                throw new Error('Error al eliminar el proveedor');
-            }
-        } catch (error) {
-            this.showNotification('Error al eliminar el proveedor: ' + error.message, 'error');
+            await this.api.delete(`/proveedores/${id}/`);
+            this.showNotification('Proveedor eliminado correctamente', 'success');
+            await this.renderDashboard();
+            await this.renderProveedoresTable();
+        } catch (e) {
+            console.error('Error eliminando proveedor:', e);
+            this.showNotification('❌ Error al eliminar proveedor: ' + (e.message || e), 'error');
         }
     }
 
-    eliminarProveedorStorage(id) {
-        const proveedores = storage.getProveedores();
-        const nuevosProveedores = proveedores.filter(p => p.id !== id);
-        
-        // Actualizar productos que tenían este proveedor
-        const productos = storage.getProductos();
-        productos.forEach(producto => {
-            if (producto.proveedor == id) {
-                producto.proveedor = null;
-            }
-        });
-        storage.setProductos(productos);
-        
-        return storage.setProveedores(nuevosProveedores);
-    }
-
-    exportData() {
-        const proveedores = storage.getProveedores();
-        const csvContent = this.convertToCSV(proveedores);
-        this.downloadCSV(csvContent, 'proveedores_sushihouse.csv');
-        this.showNotification('Datos exportados correctamente', 'success');
-    }
-
-    convertToCSV(data) {
-        if (data.length === 0) return '';
-        
-        const headers = ['Nombre', 'Contacto', 'Teléfono', 'Email', 'Dirección', 'Estado', 'Productos'];
-        const csvRows = [headers.join(',')];
-        
-        data.forEach(item => {
-            const productosCount = this.getProductosCountByProveedor(item.id);
-            const row = [
-                `"${item.nombre}"`,
-                `"${item.contacto}"`,
-                `"${item.telefono}"`,
-                `"${item.email}"`,
-                `"${item.direccion || ''}"`,
-                `"${item.estado}"`,
-                productosCount
-            ];
-            csvRows.push(row.join(','));
-        });
-        
-        return csvRows.join('\n');
-    }
-
-    downloadCSV(content, filename) {
-        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-
-    showNotification(message, type = 'info') {
+    showNotification(message, type='info') {
         const container = document.getElementById('notifications');
-        if (!container) return;
-        
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.innerHTML = `
+        if (!container) {
+            console.warn('No existe #notifications para mostrar:', message);
+            return;
+        }
+        const n = document.createElement('div');
+        n.className = `notification ${type}`;
+        n.innerHTML = `
             <span class="notification-icon">${this.getNotificationIcon(type)}</span>
             <span class="notification-message">${message}</span>
-            <button class="btn-close btn-close-sm" onclick="this.parentElement.remove()">&times;</button>
+            <button class="btn-close btn-close-sm" aria-label="Cerrar">&times;</button>
         `;
-        
-        container.appendChild(notification);
-        
-        // Auto-remover después de 5 segundos
-        setTimeout(() => {
-            if (notification.parentElement) {
-                notification.remove();
-            }
-        }, 5000);
+        container.appendChild(n);
+        n.querySelector('.btn-close')?.addEventListener('click', () => n.remove());
+        setTimeout(()=> { if (n.parentElement) n.remove(); }, 5000);
     }
 
     getNotificationIcon(type) {
-        const icons = {
-            success: '✅',
-            error: '❌',
-            warning: '⚠️',
-            info: 'ℹ️'
-        };
+        const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
         return icons[type] || 'ℹ️';
     }
 
-    escapeHtml(unsafe) {
-        if (!unsafe) return '';
-        return unsafe
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+    escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
     }
 }
 
-// Inicializar el manager de proveedores
+// inicializar
 let proveedoresManager;
 document.addEventListener('DOMContentLoaded', () => {
     proveedoresManager = new ProveedoresManager();

@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Categorías - Sushi House</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/loading.css">
 </head>
 <body>
+    <!-- LOADING SCREEN -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Cargando Categorías...</p>
+    </div>
+
     <!-- HEADER -->
     <header>
         <div class="container">
@@ -23,6 +30,7 @@
                         <li><a href="proveedores.html">Proveedores</a></li>
                         <li><a href="usuarios.html">Usuarios</a></li>
                         <li><a href="reportes.html">Reportes</a></li>
+                        <li><a href="configuracion.html">Configuración</a></li>
                     </ul>
                 </nav>
                 <div class="user-menu">
@@ -30,6 +38,7 @@
                         <div class="avatar">AM</div>
                         <span id="userName">Admin Manager</span>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -39,85 +48,142 @@
     <main class="container">
         <div class="page-title">
             <h2>Gestión de Categorías</h2>
-            <button class="btn btn-primary">
+            <button class="btn btn-primary" id="btnNuevaCategoria">
                 <span>+</span> Nueva Categoría
             </button>
         </div>
 
+        <!-- NOTIFICACIONES -->
+        <div id="notifications" class="notifications-container"></div>
+
+        <!-- DASHBOARD CATEGORÍAS -->
+        <section class="dashboard">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Total Categorías</h3>
+                    <div class="card-icon primary">🏷️</div>
+                </div>
+                <div class="card-value" id="totalCategorias">0</div>
+                <div class="card-title">Categorías registradas</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Categorías Activas</h3>
+                    <div class="card-icon success">✅</div>
+                </div>
+                <div class="card-value" id="categoriasActivas">0</div>
+                <div class="card-title">Categorías en uso</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Total Productos</h3>
+                    <div class="card-icon warning">📦</div>
+                </div>
+                <div class="card-value" id="totalProductosCategorias">0</div>
+                <div class="card-title">Productos en categorías</div>
+            </div>
+        </section>
+
         <!-- TABLA DE CATEGORÍAS -->
         <section>
+            <div class="section-header">
+                <h3>Lista de Categorías</h3>
+                <div class="table-actions">
+                    <input type="text" id="searchInputCategorias" placeholder="Buscar categorías..." class="search-input">
+                </div>
+            </div>
             <div class="table-container">
-                <table>
+                <table id="tablaCategoriasTable">
                     <thead>
                         <tr>
-                            <th>Nombre</th>
-                            <th>Descripción</th>
-                            <th>Productos</th>
+                            <th data-sort="nombre">Categoría ↗</th>
+                            <th data-sort="descripcion">Descripción</th>
+                            <th data-sort="productos">Productos</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td>Carnes</td>
-                            <td>Productos cárnicos y avícolas</td>
-                            <td>24</td>
-                            <td><span class="status in-stock">Activa</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Pescados</td>
-                            <td>Pescados y mariscos frescos</td>
-                            <td>18</td>
-                            <td><span class="status in-stock">Activa</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Verduras</td>
-                            <td>Verduras y hortalizas frescas</td>
-                            <td>32</td>
-                            <td><span class="status in-stock">Activa</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Lácteos</td>
-                            <td>Productos lácteos y derivados</td>
-                            <td>15</td>
-                            <td><span class="status in-stock">Activa</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Bebidas</td>
-                            <td>Bebidas alcohólicas y no alcohólicas</td>
-                            <td>42</td>
-                            <td><span class="status in-stock">Activa</span></td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-primary">Editar</button>
-                                <button class="btn btn-sm btn-danger">Eliminar</button>
-                            </td>
-                        </tr>
+                    <tbody id="tablaCategorias">
+                        <!-- Las categorías se cargarán dinámicamente -->
                     </tbody>
                 </table>
+                <div class="table-empty" id="tableEmptyCategorias" style="display: none;">
+                    <p>No se encontraron categorías</p>
+                </div>
+            </div>
+            <div class="pagination" id="paginationCategorias">
+                <!-- Paginación generada dinámicamente -->
             </div>
         </section>
+
+        <!-- MODAL FORMULARIO CATEGORÍA -->
+        <div id="modalCategoria" class="modal" role="dialog" aria-hidden="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitleCategoria">Nueva Categoría</h3>
+                    <button class="btn-close" id="btnCloseModalCategoria" aria-label="Cerrar">&times;</button>
+                </div>
+                <form id="categoriaForm" class="modal-form">
+                    <div class="form-group">
+                        <label for="nombreCategoria">Nombre de la Categoría *</label>
+                        <input type="text" id="nombreCategoria" name="nombre" required maxlength="100">
+                        <span class="error-message" id="errorNombreCategoria"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="descripcionCategoria">Descripción</label>
+                        <textarea id="descripcionCategoria" name="descripcion" rows="3" maxlength="500"></textarea>
+                        <div class="char-counter"><span id="descripcionCounter">0</span>/500</div>
+                        <span class="error-message" id="errorDescripcionCategoria"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="estadoCategoria">Estado</label>
+                        <select id="estadoCategoria" name="estado" required>
+                            <option value="activa">Activa</option>
+                            <option value="inactiva">Inactiva</option>
+                        </select>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn" id="btnCancelarCategoria">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="btnSubmitCategoria">
+                            <span class="btn-loading" id="btnLoadingCategoria" style="display: none;"></span>
+                            <span id="btnTextCategoria">Guardar Categoría</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL CONFIRMACIÓN -->
+        <div id="modalConfirm" class="modal" role="dialog" aria-hidden="true">
+            <div class="modal-content confirm-modal">
+                <div class="modal-header">
+                    <h3>Confirmar acción</h3>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmMessage">¿Está seguro de que desea realizar esta acción?</p>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" id="btnConfirmCancel">Cancelar</button>
+                    <button class="btn btn-danger" id="btnConfirmAccept">Aceptar</button>
+                </div>
+            </div>
+        </div>
     </main>
 
-    <!-- scripts -->
     <script src="js/storage.js"></script>
-    <script src="js/validation.js"></script>
+    <script src="js/loading.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/confirmation.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/auth.js"></script>
+
     <script src="js/script.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/categorias.js"></script>
 </body>
 </html>
